@@ -9,6 +9,9 @@ from .transforms import OPERATIONS
 
 Score = Callable[[Program], float]
 
+def _operations(limits: SearchLimits) -> tuple[str, ...]:
+    return OPERATIONS if limits.include_prte else tuple(op for op in OPERATIONS if op != "PRTE.POLARITY.REVERSE")
+
 @dataclass
 class SearchLimits:
     beam_width: int = 20
@@ -17,6 +20,7 @@ class SearchLimits:
     mcts_iterations: int = 250
     exploration: float = 1.414
     seed: int = 0
+    include_prte: bool = True
 
 @dataclass
 class SearchStats:
@@ -34,7 +38,7 @@ def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
     for _depth in range(1, limits.max_depth + 1):
         next_items = []
         for program in frontier:
-            for op in OPERATIONS:
+            for op in _operations(limits):
                 if stats.evaluated >= limits.candidate_cap:
                     stats.stopped_by_cap = True
                     break
@@ -63,7 +67,7 @@ class _Node:
     visits: int = 0
     total: float = 0.0
     children: list["_Node"] = field(default_factory=list)
-    untried: list[str] = field(default_factory=lambda: list(OPERATIONS))
+    untried: list[str] = field(default_factory=list)
 
     def uct(self, parent_visits: int, c: float) -> float:
         if self.visits == 0: return float("inf")
@@ -72,7 +76,8 @@ class _Node:
 def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
     rng = random.Random(limits.seed)
-    root = _Node(Program())
+    operations = list(_operations(limits))
+    root = _Node(Program(), untried=operations.copy())
     best: dict[tuple[str, ...], tuple[float, Program]] = {}
     for _ in range(limits.mcts_iterations):
         if stats.evaluated >= limits.candidate_cap:
@@ -84,7 +89,7 @@ def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
         if node.untried and node.program.complexity < limits.max_depth:
             op = rng.choice(node.untried)
             node.untried.remove(op)
-            child = _Node(node.program.then(op), parent=node)
+            child = _Node(node.program.then(op), parent=node, untried=operations.copy())
             node.children.append(child)
             node = child
         value = score(node.program)
