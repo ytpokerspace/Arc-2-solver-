@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from .dsl import Program
 from .grid import Grid
 from .objects import detect_objects
+from .relations import relation_graph
 from .search import SearchLimits, SearchStats, beam_search, mcts_search
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ def score_program(program: Program, examples: tuple[Example, ...], use_object_si
     cell_match = 0
     object_total = 0
     object_match = 0
+    relation_scores = []
     for ex in examples:
         try: predicted = program.apply(ex.input)
         except Exception: continue
@@ -37,14 +39,23 @@ def score_program(program: Program, examples: tuple[Example, ...], use_object_si
         for pr, tr in zip(predicted, ex.output):
             cell_total += len(tr)
             cell_match += sum(a == b for a, b in zip(pr, tr))
+        predicted_objects = detect_objects(predicted)
+        target_objects = detect_objects(ex.output)
         object_total += 1
-        object_match += (len(detect_objects(predicted)) == len(detect_objects(ex.output)))
+        object_match += (len(predicted_objects) == len(target_objects))
+        predicted_rel = [label for _, _, labels in relation_graph(predicted_objects) for label in labels]
+        target_rel = [label for _, _, labels in relation_graph(target_objects) for label in labels]
+        from collections import Counter
+        pc, tc = Counter(predicted_rel), Counter(target_rel)
+        union = sum((pc | tc).values())
+        relation_scores.append(sum((pc & tc).values()) / union if union else 1.0)
     cell_score = cell_match / cell_total if cell_total else 0.0
     object_score = object_match / object_total if object_total else 0.0
     if not use_object_signal:
         return 0.80 * exact / len(examples) + 0.20 * cell_score
-    return (0.80 * exact / len(examples) + 0.15 * cell_score
-            + 0.05 * object_score)
+    relation_score = sum(relation_scores) / len(relation_scores) if relation_scores else 0.0
+    return (0.80 * exact / len(examples) + 0.12 * cell_score
+            + 0.05 * object_score + 0.03 * relation_score)
 
 class HybridSolver:
     def __init__(self, limits: SearchLimits | None = None, strategy: str = "hybrid", use_object_signal: bool = True):
@@ -59,7 +70,8 @@ class HybridSolver:
             raise ValueError("at least one training example is required")
         beam_stats, mcts_stats = SearchStats(), SearchStats()
         scorer = lambda p: score_program(p, examples, self.use_object_signal)
-        beam = beam_search(scorer, self.limits, beam_stats) if self.strategy in {"hybrid", "beam"} else []
+        state_key = lambda p: tuple(p.apply(ex.input) for ex in examples)
+        beam = beam_search(scorer, self.limits, beam_stats, state_key=state_key) if self.strategy in {"hybrid", "beam"} else []
         remaining = max(0, self.limits.candidate_cap - beam_stats.evaluated)
         mlimits = SearchLimits(
             beam_width=self.limits.beam_width, max_depth=self.limits.max_depth,
@@ -67,7 +79,7 @@ class HybridSolver:
             exploration=self.limits.exploration, seed=self.limits.seed,
             include_prte=self.limits.include_prte,
         )
-        mcts = mcts_search(scorer, mlimits, mcts_stats) if remaining and self.strategy in {"hybrid", "mcts"} else []
+        mcts = mcts_search(scorer, mlimits, mcts_stats, state_key=state_key) if remaining and self.strategy in {"hybrid", "mcts"} else []
         if self.strategy == "identity":
             beam = [(scorer(Program()), Program())]
             beam_stats.evaluated = 1
