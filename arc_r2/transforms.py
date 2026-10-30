@@ -49,6 +49,9 @@ def apply_operation(g: Grid, name: str) -> Grid:
     if name == "REFLECT.ANTI_DIAGONAL": return reflect_anti_diagonal(g)
     if name == "POLARITY.NEGATE" or name == "COLOR.SWAP.0.1":
         return negate_polarity(g)
+    if name == "PRTE.POLARITY.REVERSE":
+        from .prte import reverse_polarity
+        return reverse_polarity(g)
     if name == "INVERSE.REVERSE.HORIZONTAL": return reverse_horizontal(g)
     if name == "INVERSE.REVERSE.VERTICAL": return reverse_vertical(g)
     if name == "INVERSE.ROTATE.180": return rotate_180(g)
@@ -60,5 +63,5 @@ def apply_operation(g: Grid, name: str) -> Grid:
 OPERATIONS = (
     "REVERSE.HORIZONTAL", "REVERSE.VERTICAL", "ROTATE.180",
     "REFLECT.MAIN_DIAGONAL", "REFLECT.ANTI_DIAGONAL",
-    "POLARITY.NEGATE",
+    "POLARITY.NEGATE", "PRTE.POLARITY.REVERSE",
 )
