@@ -52,6 +52,18 @@ class SearchTests(unittest.TestCase):
         ranked = beam_search(lambda p: 0.5, limits)
         self.assertTrue(ranked)
         self.assertTrue(all("PRTE.POLARITY.REVERSE" not in p.canonical() for _, p in ranked))
+    def test_duplicate_state_scores_are_cached(self):
+        limits = SearchLimits(max_depth=1, candidate_cap=20, mcts_iterations=12)
+        grid = as_grid([[0]])
+        calls = {"n": 0}
+        def score(program):
+            calls["n"] += 1
+            return 1.0
+        key = lambda program: program.apply(grid)
+        stats = SearchStats()
+        beam_search(score, limits, stats, state_key=key)
+        self.assertEqual(stats.evaluated, 1)
+        self.assertEqual(calls["n"], 1)
 
 class IntegrationTests(unittest.TestCase):
     def test_hybrid_fits_training_examples(self):
