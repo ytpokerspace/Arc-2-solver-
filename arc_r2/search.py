@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Hashable
 from .dsl import Program
 from .transforms import OPERATIONS
 
@@ -30,10 +30,11 @@ class SearchStats:
     mcts_iterations: int = 0
     stopped_by_cap: bool = False
 
-def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None) -> list[tuple[float, Program]]:
+def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None, state_key: Callable[[Program], Hashable] | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
     frontier = [Program()]
     seen = {()}
+    score_cache: dict[Hashable, float] = {}
     ranked: list[tuple[float, Program]] = []
     for _depth in range(1, limits.max_depth + 1):
         next_items = []
@@ -46,8 +47,16 @@ def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
                 key = child.canonical()
                 if key in seen: continue
                 seen.add(key)
-                value = score(child)
-                stats.evaluated += 1
+                fingerprint = state_key(child) if state_key is not None else key
+                if fingerprint in score_cache:
+                    value = score_cache[fingerprint]
+                else:
+                    if stats.evaluated >= limits.candidate_cap:
+                        stats.stopped_by_cap = True
+                        break
+                    value = score(child)
+                    score_cache[fingerprint] = value
+                    stats.evaluated += 1
                 stats.expanded += 1
                 next_items.append((value, child))
             if stats.stopped_by_cap: break
@@ -73,16 +82,14 @@ class _Node:
         if self.visits == 0: return float("inf")
         return self.total / self.visits + c * math.sqrt(math.log(max(1, parent_visits)) / self.visits)
 
-def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None) -> list[tuple[float, Program]]:
+def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None, state_key: Callable[[Program], Hashable] | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
     rng = random.Random(limits.seed)
     operations = list(_operations(limits))
     root = _Node(Program(), untried=operations.copy())
     best: dict[tuple[str, ...], tuple[float, Program]] = {}
+    score_cache: dict[Hashable, float] = {}
     for _ in range(limits.mcts_iterations):
-        if stats.evaluated >= limits.candidate_cap:
-            stats.stopped_by_cap = True
-            break
         node = root
         while not node.untried and node.children and node.program.complexity < limits.max_depth:
             node = max(node.children, key=lambda child: child.uct(node.visits, limits.exploration))
@@ -92,8 +99,14 @@ def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
             child = _Node(node.program.then(op), parent=node, untried=operations.copy())
             node.children.append(child)
             node = child
-        value = score(node.program)
-        stats.evaluated += 1
+        fingerprint = state_key(node.program) if state_key is not None else node.program.canonical()
+        if fingerprint not in score_cache:
+            if stats.evaluated >= limits.candidate_cap:
+                stats.stopped_by_cap = True
+                break
+            score_cache[fingerprint] = score(node.program)
+            stats.evaluated += 1
+        value = score_cache[fingerprint]
         stats.mcts_iterations += 1
         best[node.program.canonical()] = (value, node.program)
         reward = max(0.0, min(1.0, value))
