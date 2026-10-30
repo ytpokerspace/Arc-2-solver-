@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from .grid import Grid
-from .transforms import apply_operation, inverse_of
+from .transforms import apply_operation, inverse_of, OPERATIONS
 
 @dataclass(frozen=True)
 class Instruction:
@@ -39,7 +39,7 @@ def parse_program(source: str) -> Program:
     if not text or text.upper() == "IDENTITY":
         return Program()
     parts = [p.strip().upper() for p in text.split("->")]
-    allowed = set(__import__("arc_r2.transforms", fromlist=["OPERATIONS"]).OPERATIONS)
+    allowed = set(OPERATIONS)
     instructions = []
     for part in parts:
         if part.startswith("INVERSE."):
