@@ -65,10 +65,12 @@ class HybridSolver:
             beam_width=self.limits.beam_width, max_depth=self.limits.max_depth,
             candidate_cap=remaining, mcts_iterations=self.limits.mcts_iterations,
             exploration=self.limits.exploration, seed=self.limits.seed,
+            include_prte=self.limits.include_prte,
         )
         mcts = mcts_search(scorer, mlimits, mcts_stats) if remaining and self.strategy in {"hybrid", "mcts"} else []
         if self.strategy == "identity":
             beam = [(scorer(Program()), Program())]
+            beam_stats.evaluated = 1
         combined = {p.canonical(): (s, p) for s, p in beam + mcts}
         if not combined:
             combined[()] = (scorer(Program()), Program())
