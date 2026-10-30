@@ -15,14 +15,16 @@ python -m unittest discover -s tests -v
 python -m arc_r2.cli --demo
 ```
 
-For a local ARC JSON file (list of tasks with `train` and `test` arrays):
+For a local ARC JSON file (either a task list or the standard task-ID-to-task mapping, each task containing `train` and `test` arrays):
 ```bash
 python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
 ```
-The runner reads only the supplied local file. It does not download datasets.
+The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
 
 ## Architecture
 - `grid.py`: immutable grid validation and helpers.
+- `objects.py` and `relations.py`: four-connected object extraction and spatial relation graph.
+- `prte.py`: experimental dominant-background polarity reversal.
 - `transforms.py`: distinct spatial, color/polarity, and inverse operators.
 - `dsl.py`: typed operation/program representation.
 - `search.py`: bounded Beam Search and UCT-guided MCTS.
