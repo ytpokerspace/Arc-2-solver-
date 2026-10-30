@@ -4,6 +4,9 @@ from arc_r2.transforms import reverse_horizontal, reverse_vertical, negate_polar
 from arc_r2.dsl import Program, parse_program
 from arc_r2.search import SearchLimits, beam_search, mcts_search, SearchStats
 from arc_r2.solver import Example, HybridSolver, score_program
+from arc_r2.objects import detect_objects
+from arc_r2.relations import relation_graph
+from arc_r2.prte import reverse_polarity
 
 class GridTests(unittest.TestCase):
     def test_validation(self):
@@ -17,6 +20,15 @@ class GridTests(unittest.TestCase):
         self.assertEqual(reflect_main_diagonal(g), ((1,4),(2,5),(3,6)))
     def test_polarity(self):
         self.assertEqual(negate_polarity(as_grid([[0,1,2]])), ((1,0,2),))
+
+class ObjectAndPRTETests(unittest.TestCase):
+    def test_object_detection_and_relations(self):
+        grid = as_grid([[0,1,0,2],[0,1,0,2]])
+        objects = detect_objects(grid)
+        self.assertEqual(len(objects), 2)
+        self.assertIn("LEFT_OF", relation_graph(objects)[0][2])
+    def test_prte_uses_dominant_background(self):
+        self.assertEqual(reverse_polarity(as_grid([[0,0,1],[0,0,1]])), ((1,1,0),(1,1,0)))
 
 class DSLTests(unittest.TestCase):
     def test_parse_apply(self):
