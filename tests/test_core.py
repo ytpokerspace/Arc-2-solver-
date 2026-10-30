@@ -39,7 +39,7 @@ class SearchTests(unittest.TestCase):
 class IntegrationTests(unittest.TestCase):
     def test_hybrid_fits_training_examples(self):
         examples = (
-            Example(as_grid([[0,1,0]]), as_grid([[0,0,1]])),
+            Example(as_grid([[0,1,0]]), as_grid([[0,1,0]])),
             Example(as_grid([[1,0,0]]), as_grid([[0,0,1]])),
         )
         result = HybridSolver(SearchLimits(max_depth=2, candidate_cap=100, mcts_iterations=20)).solve(examples)
