@@ -47,6 +47,11 @@ class SearchTests(unittest.TestCase):
         self.assertTrue(mcts_search(score, limits, ms))
         self.assertLessEqual(bs.evaluated, 30)
         self.assertLessEqual(ms.evaluated, 10)
+    def test_prte_ablation_removes_operator(self):
+        limits = SearchLimits(max_depth=1, candidate_cap=30, include_prte=False)
+        ranked = beam_search(lambda p: 0.5, limits)
+        self.assertTrue(ranked)
+        self.assertTrue(all("PRTE.POLARITY.REVERSE" not in p.canonical() for _, p in ranked))
 
 class IntegrationTests(unittest.TestCase):
     def test_hybrid_fits_training_examples(self):
@@ -57,5 +62,10 @@ class IntegrationTests(unittest.TestCase):
         result = HybridSolver(SearchLimits(max_depth=2, candidate_cap=100, mcts_iterations=20)).solve(examples)
         self.assertEqual(result.exact_examples, 2)
         self.assertGreater(result.candidates_evaluated, 0)
+    def test_search_strategies_are_selectable(self):
+        examples = (Example(as_grid([[0,1]]), as_grid([[1,0]])),)
+        for strategy in ("identity", "beam", "mcts", "hybrid"):
+            result = HybridSolver(SearchLimits(max_depth=1, candidate_cap=20, mcts_iterations=5), strategy=strategy).solve(examples)
+            self.assertGreaterEqual(result.exact_examples, 0)
 
 if __name__ == "__main__": unittest.main()
