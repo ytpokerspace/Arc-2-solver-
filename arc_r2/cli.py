@@ -36,8 +36,10 @@ def main(argv=None):
         ], "test": []}]
     else:
         raw = json.loads(args.dataset.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        raw = [dict(value, task_id=key) for key, value in sorted(raw.items())]
     if not isinstance(raw, list):
-        parser.error("dataset must be a JSON list of task objects")
+        parser.error("dataset must be a JSON list or ARC task-id mapping")
     args.output.mkdir(parents=True, exist_ok=True)
     log_path = args.output / "run.jsonl"
     limits = SearchLimits(max_depth=args.max_depth, candidate_cap=args.candidate_cap,
