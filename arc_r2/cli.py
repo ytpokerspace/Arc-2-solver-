@@ -4,7 +4,7 @@ import argparse
 import json
 import time
 from pathlib import Path
-from .grid import as_grid
+from .grid import as_grid, to_lists
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 
@@ -53,9 +53,12 @@ def main(argv=None):
             print(f"[RUNNING] Task {index}/{min(len(raw), args.limit)}")
             examples = _task_examples(task)
             result = HybridSolver(limits).solve(examples)
-            item = {"task": index, "program": str(result.program), "train_exact": result.exact_examples,
-                    "train_total": result.total_examples, "score": round(result.score, 6),
-                    "candidates": result.candidates_evaluated}
+            predictions = [to_lists(result.program.apply(as_grid(case["input"])))
+                           for case in task.get("test", [])]
+            item = {"task": index, "task_id": task.get("task_id"), "program": str(result.program),
+                    "train_exact": result.exact_examples, "train_total": result.total_examples,
+                    "score": round(result.score, 6), "candidates": result.candidates_evaluated,
+                    "test_predictions": predictions}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
                   f"program={result.program}; candidates={result.candidates_evaluated}")
