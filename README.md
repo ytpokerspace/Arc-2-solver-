@@ -18,6 +18,7 @@ python -m arc_r2.cli --demo
 For a local ARC JSON file (either a task list or the standard task-ID-to-task mapping, each task containing `train` and `test` arrays):
 ```bash
 python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
+python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
 ```
 The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
 
@@ -28,7 +29,8 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `transforms.py`: distinct spatial, color/polarity, and inverse operators.
 - `dsl.py`: typed operation/program representation.
 - `search.py`: bounded Beam Search and UCT-guided MCTS.
-- `solver.py`: shared candidate evaluation and hybrid coordination.
+- `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid strategies.
+- `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
 
 ## Safety and reproducibility
@@ -46,4 +48,4 @@ Search depth, candidate count, MCTS iterations, and task count are bounded. The 
 A task's training examples are used to select a program; test examples are predictions only and are never used for fitting. Reported accuracy must identify the dataset and split.
 
 ## Limitations
-The initial DSL is intentionally small and does not solve arbitrary ARC tasks. Object-centric parsing, richer relational operators, official dataset ingestion validation, and evidence-based operator ablations remain future work. MCTS currently explores bounded operator sequences and shares the same evaluator as Beam Search; it is not a claim of optimal search.
+The initial DSL is intentionally small and does not solve arbitrary ARC tasks. Richer object-centric program operators, official dataset ingestion validation, and evidence-based operator conclusions remain future work. The benchmark harness exists, but no ARC-AGI-2 dataset results are claimed. MCTS currently explores bounded operator sequences and shares the same evaluator as Beam Search; it is not a claim of optimal search.
