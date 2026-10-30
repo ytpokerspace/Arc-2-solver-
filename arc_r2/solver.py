@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from .dsl import Program
 from .grid import Grid
+from .objects import detect_objects
 from .search import SearchLimits, SearchStats, beam_search, mcts_search
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ def score_program(program: Program, examples: tuple[Example, ...]) -> float:
     # Exact match is the primary objective; a small cell agreement signal helps rank near misses.
     cell_total = 0
     cell_match = 0
+    object_total = 0
+    object_match = 0
     for ex in examples:
         try: predicted = program.apply(ex.input)
         except Exception: continue
@@ -34,8 +37,12 @@ def score_program(program: Program, examples: tuple[Example, ...]) -> float:
         for pr, tr in zip(predicted, ex.output):
             cell_total += len(tr)
             cell_match += sum(a == b for a, b in zip(pr, tr))
+        object_total += 1
+        object_match += (len(detect_objects(predicted)) == len(detect_objects(ex.output)))
     cell_score = cell_match / cell_total if cell_total else 0.0
-    return 0.85 * exact / len(examples) + 0.15 * cell_score
+    object_score = object_match / object_total if object_total else 0.0
+    return (0.80 * exact / len(examples) + 0.15 * cell_score
+            + 0.05 * object_score)
 
 class HybridSolver:
     def __init__(self, limits: SearchLimits | None = None):
