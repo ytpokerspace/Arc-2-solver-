@@ -46,8 +46,7 @@ def benchmark(catalog_path: Path) -> dict:
     if declared_total != len(names):
         raise ValueError(f"TOTAL_COUNT_MISMATCH:declared={declared_total}:actual={len(names)}")
 
-    # This is intentionally the registry's actual runtime registration count.
-    # It is not a scan for similarly named helper functions elsewhere.
+    # Count only actual runtime registry entries, not similarly named helpers.
     registry = PrimitiveRegistry()
     registered = len(registry.enabled())
     return {
@@ -80,7 +79,7 @@ def main() -> None:
     if args.output:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\\n", encoding="utf-8")
+        output.write_text(rendered + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
