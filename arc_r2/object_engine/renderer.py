@@ -11,7 +11,7 @@ def render_scene(scene: Scene, height: int, width: int,
         raise ValueError("GRID_DIMENSIONS_MUST_BE_POSITIVE")
     if collision not in {"reject", "first_wins", "last_wins"}:
         raise ValueError("UNKNOWN_COLLISION_POLICY")
-    grid = [[0 for _ in range(width)] for _ in range(height)]
+    grid = [[scene.background for _ in range(width)] for _ in range(height)]
     occupied: set[tuple[int, int]] = set()
     for obj in scene.objects:
         for r, c, color in obj.pixels:
