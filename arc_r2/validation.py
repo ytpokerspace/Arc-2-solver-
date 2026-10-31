@@ -141,6 +141,8 @@ def run_leave_one_out(dataset: Path, limit=20, max_depth=3,
         "protocol": "leave_one_training_pair_out",
         "dataset": {
             "filename": dataset.name,
+            "repository": os.environ.get("ARC_DATASET_REPOSITORY", "not-provided"),
+            "revision": os.environ.get("ARC_DATASET_REVISION", "not-provided"),
             "sha256": hashlib.sha256(raw_bytes).hexdigest(),
             "tasks_loaded": len(tasks),
             "task_limit": limit,
