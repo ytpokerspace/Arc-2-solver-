@@ -1,7 +1,7 @@
 """QBS-guided, dual-track, progressively widened MCTS research scaffold.
 
-QBS ideas are supplied as explicit policies; this module does not invent or
-claim to have generated the user's ten QBS ideas.
+Search states contain every training input so a candidate is evaluated
+consistently across the complete task, not just one example.
 """
 from __future__ import annotations
 
@@ -14,7 +14,25 @@ from typing import Callable, Iterable
 from .grid import Grid
 from .primitive_engine import Primitive, PrimitiveRegistry
 
-ScoreFn = Callable[[Grid], float]
+ScoreFn = Callable[["TaskState"], float]
+StateGuard = Callable[["TaskState"], bool]
+
+
+@dataclass(frozen=True)
+class TaskState:
+    grids: tuple[Grid, ...]
+
+    def __post_init__(self) -> None:
+        if not self.grids:
+            raise ValueError("TASK_STATE_REQUIRES_AT_LEAST_ONE_GRID")
+        shapes = {(len(g), len(g[0])) for g in self.grids}
+        if any(not g or not g[0] for g in self.grids):
+            raise ValueError("EMPTY_GRID_IN_TASK_STATE")
+        if any(any(len(row) != len(g[0]) for row in g) for g in self.grids):
+            raise ValueError("NON_RECTANGULAR_GRID_IN_TASK_STATE")
+
+    def apply(self, primitive: Primitive) -> "TaskState":
+        return TaskState(tuple(primitive.apply(grid) for grid in self.grids))
 
 
 @dataclass(frozen=True)
@@ -64,12 +82,12 @@ class SearchLimits:
 class Candidate:
     score: float
     program: tuple[str, ...]
-    grid: Grid
+    state: TaskState
 
 
 @dataclass
 class _Node:
-    grid: Grid
+    state: TaskState
     program: tuple[str, ...]
     parent: "_Node | None" = None
     visits: int = 0
@@ -94,18 +112,25 @@ class TrackResult:
     pruned: int
 
 
-def _rank_actions(actions: tuple[Primitive, ...], policy: SeedPolicy) -> tuple[Primitive, ...]:
-    priority = {name: i for i, name in enumerate(policy.preferred_families)}
+def _rank_actions(actions: tuple[Primitive, ...], policies: tuple[SeedPolicy, ...]) -> tuple[Primitive, ...]:
+    family_votes: dict[str, float] = defaultdict(float)
+    first_seen: dict[str, int] = {}
+    for policy in policies:
+        for rank, family in enumerate(policy.preferred_families):
+            family_votes[family] += policy.weight / (rank + 1)
+            first_seen.setdefault(family, len(first_seen))
     return tuple(sorted(actions, key=lambda p: (
-        priority.get(p.spec.family, len(priority) + 1),
+        -family_votes.get(p.spec.family, 0.0),
+        first_seen.get(p.spec.family, len(first_seen) + 1),
         p.spec.cost,
         p.spec.name,
     )))
 
 
-def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
+def run_mcts_track(initial: TaskState, registry: PrimitiveRegistry,
                    policies: tuple[SeedPolicy, ...], score: ScoreFn,
-                   limits: SearchLimits, track: str) -> TrackResult:
+                   limits: SearchLimits, track: str,
+                   state_guard: StateGuard | None = None) -> TrackResult:
     if not policies:
         raise ValueError("AT_LEAST_ONE_SEED_POLICY_REQUIRED")
     if limits.iterations <= 0 or limits.max_depth < 1 or limits.candidate_cap < 1:
@@ -114,28 +139,10 @@ def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
     actions = registry.enabled()
     if not actions:
         raise ValueError("EMPTY_PRIMITIVE_REGISTRY")
-    # The ten QBS seeds are policy priors, not ten extra grid operators.
-    family_votes: dict[str, float] = defaultdict(float)
-    first_seen: dict[str, int] = {}
-    for policy in policies:
-        for rank, family in enumerate(policy.preferred_families):
-            family_votes[family] += policy.weight / (rank + 1)
-            first_seen.setdefault(family, len(first_seen))
-    family_order = sorted(
-        family_votes,
-        key=lambda family: (-family_votes[family], first_seen[family], family),
-    )
-    policy = SeedPolicy(
-        seed_id=f"{track}:aggregate",
-        idea="Aggregate policy prior over supplied QBS seeds",
-        preferred_families=tuple(family_order),
-        compatibility_tags=tuple(sorted({t for p in policies for t in p.compatibility_tags})),
-        weight=sum(p.weight for p in policies) / len(policies),
-    )
-    ordered = _rank_actions(actions, policy)
+    ordered = _rank_actions(actions, policies)
     rng = random.Random(limits.seed)
     root = _Node(initial, ())
-    cache: dict[Grid, float] = {initial: score(initial)}
+    cache: dict[TaskState, float] = {initial: score(initial)}
     best: dict[tuple[str, ...], Candidate] = {
         (): Candidate(cache[initial], (), initial)
     }
@@ -143,9 +150,8 @@ def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
 
     for _ in range(limits.iterations):
         node = root
-        # Selection
         while node.children and len(node.program) < limits.max_depth:
-            node = max(node.children, key=lambda n: n.uct(node.visits, limits.exploration))
+            node = max(node.children, key=lambda n: n.uct(node.parent.visits if node.parent else 1, limits.exploration))
             if len(node.program) >= limits.max_depth:
                 break
 
@@ -155,28 +161,34 @@ def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
                 max(limits.initial_width,
                     int(limits.widening_k * max(1, node.visits) ** limits.widening_alpha)),
             )
-            # Progressive widening: expose only the next ranked actions.
             if node.next_action < allowed:
                 primitive = ordered[node.next_action]
                 node.next_action += 1
                 try:
-                    child_grid = primitive.apply(node.grid)
-                    if child_grid == node.grid:
+                    if not all(primitive.precondition is None or primitive.precondition(g)
+                               for g in node.state.grids):
                         pruned += 1
                     else:
-                        child = _Node(child_grid, node.program + (primitive.spec.name,), node)
-                        node.children.append(child)
-                        expanded += 1
-                        node = child
+                        child_state = node.state.apply(primitive)
+                        if child_state == node.state or (state_guard and not state_guard(child_state)):
+                            pruned += 1
+                        elif child_state in cache:
+                            # Equivalent full-task states need not create duplicate subtrees.
+                            pruned += 1
+                        else:
+                            child = _Node(child_state, node.program + (primitive.spec.name,), node)
+                            node.children.append(child)
+                            expanded += 1
+                            node = child
                 except (ValueError, IndexError, TypeError):
                     pruned += 1
 
-        if node.grid not in cache:
+        if node.state not in cache:
             if len(cache) >= limits.candidate_cap:
                 break
-            cache[node.grid] = score(node.grid)
-        value = cache[node.grid]
-        best[node.program] = Candidate(value, node.program, node.grid)
+            cache[node.state] = score(node.state)
+        value = cache[node.state]
+        best[node.program] = Candidate(value, node.program, node.state)
         current: _Node | None = node
         reward = max(0.0, min(1.0, value))
         while current is not None:
@@ -188,35 +200,34 @@ def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
     return TrackResult(track, tuple(ranked), len(cache), expanded, pruned)
 
 
-def run_dual_tracks(initial: Grid, registry: PrimitiveRegistry,
+def run_dual_tracks(initial: TaskState, registry: PrimitiveRegistry,
                     seeds: tuple[SeedPolicy, ...], hybrids: tuple[SeedPolicy, ...],
-                    score: ScoreFn, limits: SearchLimits) -> tuple[TrackResult, TrackResult]:
+                    score: ScoreFn, limits: SearchLimits,
+                    state_guard: StateGuard | None = None) -> tuple[TrackResult, TrackResult]:
     if len(seeds) != 10:
         raise ValueError(f"EXPECTED_TEN_QBS_SEEDS:actual={len(seeds)}")
     if not hybrids:
         raise ValueError("NO_COMPATIBLE_QBS_HYBRIDS")
-    # Independent RNG seeds and budgets keep the tracks experimentally separable.
     a_limits = SearchLimits(**{**limits.__dict__, "seed": limits.seed})
     b_limits = SearchLimits(**{**limits.__dict__, "seed": limits.seed + 1})
-    seed_track = run_mcts_track(initial, registry, seeds, score, a_limits, "seed")
-    hybrid_track = run_mcts_track(initial, registry, hybrids, score, b_limits, "hybrid")
+    seed_track = run_mcts_track(initial, registry, seeds, score, a_limits, "seed", state_guard)
+    hybrid_track = run_mcts_track(initial, registry, hybrids, score, b_limits, "hybrid", state_guard)
     return seed_track, hybrid_track
-
 
 
 def beam_rerank(results: tuple[TrackResult, ...], registry: PrimitiveRegistry,
                 beam_width: int = 32) -> tuple[Candidate, ...]:
-    """Merge both tracks, deduplicate equivalent grids, and preserve family diversity."""
+    """Merge both tracks, deduplicate equivalent task states, preserve family diversity."""
     if beam_width < 1:
         raise ValueError("BEAM_WIDTH_MUST_BE_POSITIVE")
-    unique: dict[Grid, Candidate] = {}
+    unique: dict[TaskState, Candidate] = {}
     for result in results:
         for candidate in result.candidates:
-            prior = unique.get(candidate.grid)
+            prior = unique.get(candidate.state)
             if prior is None or (candidate.score, -len(candidate.program)) > (
                 prior.score, -len(prior.program)
             ):
-                unique[candidate.grid] = candidate
+                unique[candidate.state] = candidate
 
     ranked = sorted(
         unique.values(),
