@@ -21,3 +21,67 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Synthetic CLI smoke test
         run: python -m arc_r2.cli --demo --output /tmp/arc-r2-smoke
+
+  arc2-training-baseline:
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'research/baseline-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check out pinned public ARC-AGI-2 training data
+        uses: actions/checkout@v4
+        with:
+          repository: arcprize/ARC-AGI-2
+          ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
+          path: arc-agi-2-data
+          persist-credentials: false
+      - name: Build deterministic 20-task training sample
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("arc-agi-2-data/data/training")
+          files = sorted(
+              root.glob("*.json"),
+              key=lambda path: hashlib.sha256(path.stem.encode("utf-8")).hexdigest(),
+          )
+          selected = files[:20]
+          if len(selected) != 20:
+              raise SystemExit(f"Expected 20 training tasks, found {len(selected)}")
+          tasks = []
+          for path in selected:
+              task = json.loads(path.read_text(encoding="utf-8"))
+              task["task_id"] = path.stem
+              tasks.append(task)
+          Path("arc_training_sample.json").write_text(
+              json.dumps(tasks, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          print(f"Selected {len(tasks)} of {len(files)} official training tasks.")
+          print("Task IDs:", ", ".join(task["task_id"] for task in tasks))
+          PY
+      - name: Run leave-one-training-pair-out baseline
+        env:
+          ARC_DATASET_REPOSITORY: arcprize/ARC-AGI-2
+          ARC_DATASET_REVISION: f3283f727488ad98fe575ea6a5ac981e4a188e49
+        run: |
+          mkdir -p artifacts
+          python -m arc_r2.validation \
+            --dataset arc_training_sample.json \
+            --limit 20 \
+            --max-depth 2 \
+            --candidate-cap 200 \
+            --mcts-iterations 20 \
+            --output artifacts/arc2-training-20-loo.json
+      - name: Upload baseline report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-baseline-${{ github.sha }}
+          path: artifacts/arc2-training-20-loo.json
+          if-no-files-found: error
+          retention-days: 30
