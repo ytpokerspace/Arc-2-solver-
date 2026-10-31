@@ -95,7 +95,7 @@ class ObjectEngineTests(unittest.TestCase):
         source: Grid = ((1, 0), (0, 0))
         source_two: Grid = ((0, 1), (0, 0))
         target: Grid = ((0, 1), (0, 0))
-        target_two: Grid = ((0, 0), (1, 0))
+        target_two: Grid = ((0, 0), (0, 1))
 
         def clockwise(grid: Grid) -> Grid:
             return tuple(tuple(row[c] for row in reversed(grid)) for c in range(len(grid[0])))
