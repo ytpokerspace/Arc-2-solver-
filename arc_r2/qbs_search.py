@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
@@ -114,11 +115,16 @@ def run_mcts_track(initial: Grid, registry: PrimitiveRegistry,
     if not actions:
         raise ValueError("EMPTY_PRIMITIVE_REGISTRY")
     # The ten QBS seeds are policy priors, not ten extra grid operators.
-    family_order: list[str] = []
+    family_votes: dict[str, float] = defaultdict(float)
+    first_seen: dict[str, int] = {}
     for policy in policies:
-        for family in policy.preferred_families:
-            if family not in family_order:
-                family_order.append(family)
+        for rank, family in enumerate(policy.preferred_families):
+            family_votes[family] += policy.weight / (rank + 1)
+            first_seen.setdefault(family, len(first_seen))
+    family_order = sorted(
+        family_votes,
+        key=lambda family: (-family_votes[family], first_seen[family], family),
+    )
     policy = SeedPolicy(
         seed_id=f"{track}:aggregate",
         idea="Aggregate policy prior over supplied QBS seeds",
@@ -195,3 +201,39 @@ def run_dual_tracks(initial: Grid, registry: PrimitiveRegistry,
     seed_track = run_mcts_track(initial, registry, seeds, score, a_limits, "seed")
     hybrid_track = run_mcts_track(initial, registry, hybrids, score, b_limits, "hybrid")
     return seed_track, hybrid_track
+
+
+
+def beam_rerank(results: tuple[TrackResult, ...], registry: PrimitiveRegistry,
+                beam_width: int = 32) -> tuple[Candidate, ...]:
+    """Merge both tracks, deduplicate equivalent grids, and preserve family diversity."""
+    if beam_width < 1:
+        raise ValueError("BEAM_WIDTH_MUST_BE_POSITIVE")
+    unique: dict[Grid, Candidate] = {}
+    for result in results:
+        for candidate in result.candidates:
+            prior = unique.get(candidate.grid)
+            if prior is None or (candidate.score, -len(candidate.program)) > (
+                prior.score, -len(prior.program)
+            ):
+                unique[candidate.grid] = candidate
+
+    ranked = sorted(
+        unique.values(),
+        key=lambda c: (c.score, -len(c.program), c.program),
+        reverse=True,
+    )
+    selected: list[Candidate] = []
+    seen_families: set[str] = set()
+    deferred: list[Candidate] = []
+    for candidate in ranked:
+        family = registry.get(candidate.program[0]).spec.family if candidate.program else "identity"
+        if family not in seen_families:
+            selected.append(candidate)
+            seen_families.add(family)
+        else:
+            deferred.append(candidate)
+        if len(selected) == beam_width:
+            return tuple(selected)
+    selected.extend(deferred[:max(0, beam_width - len(selected))])
+    return tuple(selected)
