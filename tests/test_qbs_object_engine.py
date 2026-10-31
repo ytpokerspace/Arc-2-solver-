@@ -101,6 +101,9 @@ class ObjectEngineTests(unittest.TestCase):
             return tuple(tuple(row[c] for row in reversed(grid)) for c in range(len(grid[0])))
 
         registry.register(PrimitiveSpec("rotate90", "geometry"), clockwise)
+        def flip_vertical(grid: Grid) -> Grid:
+            return tuple(reversed(grid))
+        registry.register(PrimitiveSpec("flip_vertical", "grid_geometry"), flip_vertical)
         seeds = tuple(
             SeedPolicy(f"S{i}", f"idea-{i}", ("geometry",), ("shape",))
             for i in range(10)
@@ -116,6 +119,8 @@ class ObjectEngineTests(unittest.TestCase):
         self.assertEqual(a.track, "seed")
         self.assertEqual(b.track, "hybrid")
         self.assertIsNot(a, b)
+        self.assertTrue(any(candidate.program[:1] == ("flip_vertical",)
+                            for candidate in a.candidates))
         merged = beam_rerank((a, b), registry, beam_width=4)
         self.assertTrue(merged)
         self.assertEqual(merged[0].state, expected)
