@@ -5,8 +5,10 @@ from .model import Scene
 from ..grid import Grid
 
 
-def render_scene(scene: Scene, height: int, width: int,
+def render_scene(scene: Scene, height: int | None = None, width: int | None = None,
                  collision: str = "reject") -> Grid:
+    height = scene.height if height is None else height
+    width = scene.width if width is None else width
     if height <= 0 or width <= 0:
         raise ValueError("GRID_DIMENSIONS_MUST_BE_POSITIVE")
     if collision not in {"reject", "first_wins", "last_wins"}:
