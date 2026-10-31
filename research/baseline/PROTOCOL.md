@@ -71,12 +71,12 @@ result. Do not use hidden evaluation answers for fitting, tuning, or selection.
 ## Pinned public training-data smoke benchmark
 
 The baseline PR workflow checks out `arcprize/ARC-AGI-2` at commit
-`f3283f727488ad98fe575ea6a5ac981e4a188e49`, selects 20 training tasks by
+`f3283f727488ad98fe575ea6a5ac981e4a188e49`, selects 100 training tasks by
 SHA-256 ordering of task IDs, and runs all six existing solver variants with
-fixed per-fold limits (depth 2, candidate cap 200, MCTS iterations 20).
+the existing benchmark defaults per fold (depth 3, candidate cap 1200, MCTS iterations 100).
 The resulting JSON is uploaded as a GitHub Actions artifact.
 
 Only the public training split is used. The public evaluation split is not
-used for fitting, tuning, or this smoke benchmark. The 20-task result is an
+used for fitting, tuning, or this smoke benchmark. The 100-task result is an
 initial reproducibility and runtime check, not a full-dataset score or an
 official ARC evaluation result.
