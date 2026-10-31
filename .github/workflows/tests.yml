@@ -25,7 +25,7 @@ jobs:
   arc2-training-baseline:
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'research/baseline-')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +38,7 @@ jobs:
           ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
           path: arc-agi-2-data
           persist-credentials: false
-      - name: Build deterministic 20-task training sample
+      - name: Build deterministic 100-task training sample
         run: |
           python - <<'PY'
           import hashlib
@@ -50,7 +50,7 @@ jobs:
               root.glob("*.json"),
               key=lambda path: hashlib.sha256(path.stem.encode("utf-8")).hexdigest(),
           )
-          selected = files[:20]
+          selected = files[:100]
           if len(selected) != 20:
               raise SystemExit(f"Expected 20 training tasks, found {len(selected)}")
           tasks = []
@@ -77,7 +77,7 @@ jobs:
             --max-depth 2 \
             --candidate-cap 200 \
             --mcts-iterations 20 \
-            --output artifacts/arc2-training-20-loo.json
+            --output artifacts/arc2-training-100-loo.json
       - name: Upload baseline report
         uses: actions/upload-artifact@v4
         with:
