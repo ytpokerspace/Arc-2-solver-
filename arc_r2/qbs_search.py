@@ -149,10 +149,16 @@ def run_mcts_track(initial: TaskState, registry: PrimitiveRegistry,
 
     for _ in range(limits.iterations):
         node = root
-        while node.children and len(node.program) < limits.max_depth:
-            node = max(node.children, key=lambda n: n.uct(node.visits, limits.exploration))
-            if len(node.program) >= limits.max_depth:
+        # Descend only after this node exhausts its currently exposed actions.
+        while len(node.program) < limits.max_depth:
+            allowed_here = min(
+                len(ordered),
+                max(limits.initial_width,
+                    int(limits.widening_k * max(1, node.visits) ** limits.widening_alpha)),
+            )
+            if node.next_action < allowed_here or not node.children:
                 break
+            node = max(node.children, key=lambda n: n.uct(node.visits, limits.exploration))
 
         if len(node.program) < limits.max_depth:
             allowed = min(
