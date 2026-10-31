@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 
+from arc_r2.object_engine.operators import scale_down, hollow, recolor, bbox, place_at, center_in, align_to, transpose, rotate180, rotate270, normalize
+
 from arc_r2.grid import Grid
 from arc_r2.object_engine import (
     ObjectState, Scene, extract_scene, move, rotate90,
@@ -89,6 +91,34 @@ class ObjectEngineTests(unittest.TestCase):
             SeedPolicy("B", "b", ("color",), ("count",)),
         ))
         self.assertEqual(incompatible, ())
+
+
+    def test_extended_shape_scale_and_placement_operators(self):
+        obj = ObjectState("shape", ((0, 0, 2), (0, 1, 2), (1, 0, 2),
+                                    (1, 1, 2), (2, 0, 2), (2, 1, 2)), 4, 5)
+        self.assertEqual(len(hollow(obj).pixels), 6)  # 2-wide shape has no 4-neighbor interior
+        self.assertEqual(recolor(obj, 7).pixels[0][2], 7)
+        self.assertEqual(scale_down(obj, 2).pixels,
+                         ((0, 0, 2), (1, 0, 2)))
+        self.assertEqual(bbox(obj), (0, 0, 2, 1))
+        centered = center_in(obj, 9, 10)
+        self.assertEqual((centered.x, centered.y), (4, 3))
+        target = ObjectState("target", ((0, 0, 1), (0, 1, 1)), 8, 2)
+        right_aligned = align_to(obj, target, "right")
+        self.assertEqual(right_aligned.x + bbox(obj)[3],
+                         target.x + bbox(target)[3])
+        placed = place_at(obj, 1, 2)
+        self.assertEqual((placed.x, placed.y), (1, 2))
+
+    def test_normalize_and_orientation_operators_preserve_top_left(self):
+        obj = ObjectState("shape", ((2, 3, 4), (2, 4, 4), (3, 3, 4)), 5, 6)
+        normalized = normalize(obj)
+        self.assertEqual((normalized.x, normalized.y), (8, 8))
+        self.assertEqual(min(r for r, _, _ in normalized.pixels), 0)
+        self.assertEqual(min(c for _, c, _ in normalized.pixels), 0)
+        for transformed in (rotate180(obj), rotate270(obj), transpose(obj)):
+            self.assertTrue(transformed.pixels)
+            self.assertEqual((transformed.x, transformed.y), (8, 8))
 
     def test_dual_mcts_tracks_and_beam_reranking_are_separate(self):
         registry = PrimitiveRegistry()
