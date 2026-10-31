@@ -5,11 +5,11 @@ import unittest
 from arc_r2.grid import Grid
 from arc_r2.object_engine import (
     ObjectState, Scene, extract_scene, move, rotate90,
-    flip_horizontal, scale_up, render_scene,
+    flip_horizontal, scale_up, render_scene, move_object, object_exists,
 )
 from arc_r2.primitive_engine import PrimitiveRegistry, PrimitiveSpec
 from arc_r2.qbs_search import (
-    SeedPolicy, SearchLimits, hybridize, run_dual_tracks, beam_rerank,
+    SeedPolicy, SearchLimits, TaskState, hybridize, run_dual_tracks, beam_rerank,
 )
 
 
@@ -24,6 +24,13 @@ class ObjectEngineTests(unittest.TestCase):
         self.assertEqual(render_scene(Scene((moved,), 3, 4)), (
             (0, 0, 0, 0), (0, 0, 2, 2), (0, 0, 0, 0)
         ))
+
+    def test_grid_adapter_transforms_selected_object(self):
+        grid: Grid = ((0, 0, 0, 0), (0, 2, 2, 0), (0, 0, 0, 0))
+        self.assertTrue(object_exists(0)(grid))
+        self.assertFalse(object_exists(1)(grid))
+        moved = move_object(grid, 0, 1, 0)
+        self.assertEqual(moved, ((0, 0, 0, 0), (0, 0, 2, 2), (0, 0, 0, 0)))
 
     def test_rotation_top_left_anchor_and_dimensions(self):
         obj = ObjectState("x", ((0, 0, 1), (0, 1, 1), (1, 0, 1)), 4, 3)
@@ -86,7 +93,9 @@ class ObjectEngineTests(unittest.TestCase):
     def test_dual_mcts_tracks_and_beam_reranking_are_separate(self):
         registry = PrimitiveRegistry()
         source: Grid = ((1, 0), (0, 0))
+        source_two: Grid = ((0, 1), (0, 0))
         target: Grid = ((0, 1), (0, 0))
+        target_two: Grid = ((0, 0), (1, 0))
 
         def clockwise(grid: Grid) -> Grid:
             return tuple(tuple(row[c] for row in reversed(grid)) for c in range(len(grid[0])))
@@ -97,9 +106,11 @@ class ObjectEngineTests(unittest.TestCase):
             for i in range(10)
         )
         hybrids = hybridize(seeds, limit=10)
-        score = lambda grid: 1.0 if grid == target else 0.0
+        initial = TaskState((source, source_two))
+        expected = TaskState((target, target_two))
+        score = lambda state: 1.0 if state == expected else 0.0
         a, b = run_dual_tracks(
-            source, registry, seeds, hybrids, score,
+            initial, registry, seeds, hybrids, score,
             SearchLimits(iterations=12, max_depth=2, candidate_cap=20, initial_width=1),
         )
         self.assertEqual(a.track, "seed")
@@ -107,7 +118,7 @@ class ObjectEngineTests(unittest.TestCase):
         self.assertIsNot(a, b)
         merged = beam_rerank((a, b), registry, beam_width=4)
         self.assertTrue(merged)
-        self.assertEqual(merged[0].grid, target)
+        self.assertEqual(merged[0].state, expected)
 
 
 if __name__ == "__main__":
