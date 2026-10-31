@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterable
+from typing import Callable
 
 from .grid import Grid
 
 GridTransform = Callable[[Grid], Grid]
+GridPrecondition = Callable[[Grid], bool]
 
 
 @dataclass(frozen=True)
@@ -24,13 +25,15 @@ class PrimitiveSpec:
 class Primitive:
     spec: PrimitiveSpec
     apply: GridTransform
+    precondition: GridPrecondition | None = None
 
 
 class PrimitiveRegistry:
     def __init__(self) -> None:
         self._items: dict[str, Primitive] = {}
 
-    def register(self, spec: PrimitiveSpec, apply: GridTransform) -> None:
+    def register(self, spec: PrimitiveSpec, apply: GridTransform,
+                 precondition: GridPrecondition | None = None) -> None:
         if not spec.name or not spec.family:
             raise ValueError("PRIMITIVE_NAME_AND_FAMILY_REQUIRED")
         if spec.name in self._items:
@@ -39,7 +42,7 @@ class PrimitiveRegistry:
             raise ValueError("CURRENT_SEARCH_ADAPTER_REQUIRES_GRID_TO_GRID_PRIMITIVES")
         if spec.cost <= 0:
             raise ValueError("PRIMITIVE_COST_MUST_BE_POSITIVE")
-        self._items[spec.name] = Primitive(spec, apply)
+        self._items[spec.name] = Primitive(spec, apply, precondition)
 
     def get(self, name: str) -> Primitive:
         return self._items[name]
