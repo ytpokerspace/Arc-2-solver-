@@ -25,7 +25,6 @@ class TaskState:
     def __post_init__(self) -> None:
         if not self.grids:
             raise ValueError("TASK_STATE_REQUIRES_AT_LEAST_ONE_GRID")
-        shapes = {(len(g), len(g[0])) for g in self.grids}
         if any(not g or not g[0] for g in self.grids):
             raise ValueError("EMPTY_GRID_IN_TASK_STATE")
         if any(any(len(row) != len(g[0]) for row in g) for g in self.grids):
@@ -151,7 +150,7 @@ def run_mcts_track(initial: TaskState, registry: PrimitiveRegistry,
     for _ in range(limits.iterations):
         node = root
         while node.children and len(node.program) < limits.max_depth:
-            node = max(node.children, key=lambda n: n.uct(node.parent.visits if node.parent else 1, limits.exploration))
+            node = max(node.children, key=lambda n: n.uct(node.visits, limits.exploration))
             if len(node.program) >= limits.max_depth:
                 break
 
