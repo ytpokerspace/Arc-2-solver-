@@ -116,7 +116,9 @@ class ObjectEngineTests(unittest.TestCase):
         self.assertEqual((normalized.x, normalized.y), (8, 8))
         self.assertEqual(min(r for r, _, _ in normalized.pixels), 0)
         self.assertEqual(min(c for _, c, _ in normalized.pixels), 0)
-        for transformed in (rotate180(obj), rotate270(obj), transpose(obj)):
+        normalized_shape = ObjectState("normalized", ((0, 0, 4), (0, 1, 4), (1, 0, 4)), 8, 8)
+        for transformed in (rotate180(normalized_shape), rotate270(normalized_shape),
+                            transpose(normalized_shape)):
             self.assertTrue(transformed.pixels)
             self.assertEqual((transformed.x, transformed.y), (8, 8))
 
