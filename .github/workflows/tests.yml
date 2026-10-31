@@ -51,8 +51,8 @@ jobs:
               key=lambda path: hashlib.sha256(path.stem.encode("utf-8")).hexdigest(),
           )
           selected = files[:100]
-          if len(selected) != 20:
-              raise SystemExit(f"Expected 20 training tasks, found {len(selected)}")
+          if len(selected) != 100:
+              raise SystemExit(f"Expected 100 training tasks, found {len(selected)}")
           tasks = []
           for path in selected:
               task = json.loads(path.read_text(encoding="utf-8"))
@@ -73,15 +73,15 @@ jobs:
           mkdir -p artifacts
           python -m arc_r2.validation \
             --dataset arc_training_sample.json \
-            --limit 20 \
-            --max-depth 2 \
-            --candidate-cap 200 \
-            --mcts-iterations 20 \
+            --limit 100 \
+            --max-depth 3 \
+            --candidate-cap 1200 \
+            --mcts-iterations 100 \
             --output artifacts/arc2-training-100-loo.json
       - name: Upload baseline report
         uses: actions/upload-artifact@v4
         with:
           name: arc-r2-baseline-${{ github.sha }}
-          path: artifacts/arc2-training-20-loo.json
+          path: artifacts/arc2-training-100-loo.json
           if-no-files-found: error
           retention-days: 30
