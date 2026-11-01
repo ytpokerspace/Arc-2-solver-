@@ -1,8 +1,8 @@
-"""Structural benchmark for the authoritative ARC primitive catalog.
+"""Structural validation for the authoritative ARC primitive catalog.
 
-This measures catalog integrity and registry registration coverage. It does not
-measure ARC task-solving accuracy or claim that unregistered functions do not
-exist elsewhere in the codebase.
+This validates catalog integrity only. Runtime implementation coverage is
+reported as unavailable until the project exposes a populated registry factory.
+It is not an ARC task-solving accuracy benchmark.
 """
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from collections import Counter
 from pathlib import Path
 
 import yaml
-
-from arc_r2.primitive_engine import PrimitiveRegistry
 
 
 def benchmark(catalog_path: Path) -> dict:
@@ -32,7 +30,9 @@ def benchmark(catalog_path: Path) -> dict:
             raise ValueError(f"INVALID_PRIMITIVE_NAME:{category}")
         declared = entry.get("count")
         if declared != len(items):
-            raise ValueError(f"CATEGORY_COUNT_MISMATCH:{category}:declared={declared}:actual={len(items)}")
+            raise ValueError(
+                f"CATEGORY_COUNT_MISMATCH:{category}:declared={declared}:actual={len(items)}"
+            )
         category_counts[category] = len(items)
         names.extend(items)
 
@@ -42,13 +42,12 @@ def benchmark(catalog_path: Path) -> dict:
     if duplicates:
         raise ValueError(f"DUPLICATE_PRIMITIVES:{','.join(duplicates)}")
     if len(names) != expected or len(set(names)) != expected:
-        raise ValueError(f"UNIQUE_COUNT_MISMATCH:expected={expected}:actual={len(set(names))}")
+        raise ValueError(
+            f"UNIQUE_COUNT_MISMATCH:expected={expected}:actual={len(set(names))}"
+        )
     if declared_total != len(names):
         raise ValueError(f"TOTAL_COUNT_MISMATCH:declared={declared_total}:actual={len(names)}")
 
-    # Count only actual runtime registry entries, not similarly named helpers.
-    registry = PrimitiveRegistry()
-    registered = len(registry.enabled())
     return {
         "benchmark": "arc_primitive_catalog_structural",
         "catalog_id": raw.get("catalog_id"),
@@ -58,12 +57,14 @@ def benchmark(catalog_path: Path) -> dict:
         "catalog_primitive_count": len(names),
         "unique_primitive_count": len(set(names)),
         "duplicate_count": len(duplicates),
-        "registered_executable_primitive_count": registered,
-        "registered_coverage_percent": round(100.0 * registered / len(names), 2) if names else 0.0,
-        "unregistered_catalog_entries": len(names) - registered,
+        "runtime_registry_status": "not_wired",
+        "registered_executable_primitive_count": None,
+        "registered_coverage_percent": None,
+        "unregistered_catalog_entries": None,
         "interpretation": (
-            "Structural catalog validation only. Runtime registry coverage is "
-            "reported separately; this is not an ARC-AGI-2 accuracy benchmark."
+            "Catalog structure and uniqueness validated. Runtime implementation "
+            "coverage is unavailable because no populated registry factory is "
+            "connected to this benchmark. This is not an ARC-AGI-2 accuracy benchmark."
         ),
     }
 
@@ -79,7 +80,7 @@ def main() -> None:
     if args.output:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
+        output.write_text(rendered + "\\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
