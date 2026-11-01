@@ -10,6 +10,8 @@ on:
       - "arc_r2/cli.py"
       - "tests/**"
       - "arc_r2/object_solver.py"
+      - "arc_r2/object_dsl.py"
+      - "arc_r2/object_quantum_brainstorming.py"
       - ".github/workflows/benchmark.yml"
   pull_request:
     paths:
@@ -60,7 +62,7 @@ jobs:
             --limit "$TASK_LIMIT" \
             --max-depth 2 \
             --candidate-cap 500 \
-            --mcts-iterations 20 \
+            --mcts-iterations 0 \
             --output arc_r2_engine_comparison.json
       - name: Upload comparison report
         if: always()
