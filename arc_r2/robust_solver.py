@@ -50,21 +50,9 @@ class Attempt:
 
 
 def _family(program: Program | tuple[str, ...]) -> tuple[str, ...]:
+    """Return the exact operator sequence as a structural fingerprint."""
     operations = program.canonical() if isinstance(program, Program) else program
-    labels = set()
-    for op in operations:
-        if op in _GEOMETRY:
-            labels.add("geometry")
-        elif op.startswith("COLOR.SWAP."):
-            labels.add("color-swap")
-        elif op == "POLARITY.NEGATE":
-            labels.add("polarity")
-        elif op.startswith("PRTE."):
-            labels.add("adaptive-polarity")
-        else:
-            labels.add(op.split(".")[0].lower())
-    return tuple(sorted(labels)) or ("identity",)
-
+    return operations or ("IDENTITY",)
 
 def _pack(grids: Iterable[Grid]) -> tuple[np.ndarray, np.ndarray]:
     rows = tuple(as_grid(grid) for grid in grids)
