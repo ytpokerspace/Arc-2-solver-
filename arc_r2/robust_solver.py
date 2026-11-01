@@ -122,6 +122,30 @@ def batch_apply_operation(
     n = tensor.shape[0]
     out = np.full_like(tensor, PAD)
     new_shapes = shapes.copy()
+    if use_cache and n:
+        source_grids = _unpack(tensor, shapes)
+        misses = []
+        for index, source in enumerate(source_grids):
+            cached = _OPERATION_CACHE.get(_cache_key(source, operation))
+            if cached is None:
+                misses.append(index)
+            else:
+                packed, packed_shapes = _pack((cached[0],))
+                out[index] = packed[0]
+                new_shapes[index] = packed_shapes[0]
+        if misses:
+            computed, computed_shapes = batch_apply_operation(
+                tensor[misses], shapes[misses], operation, use_cache=False
+            )
+            out[misses] = computed
+            new_shapes[misses] = computed_shapes
+            for source_index, result_grid in zip(misses, _unpack(computed, computed_shapes)):
+                if len(_OPERATION_CACHE) >= _OPERATION_CACHE_LIMIT:
+                    _OPERATION_CACHE.clear()
+                _OPERATION_CACHE[_cache_key(source_grids[source_index], operation)] = (
+                    result_grid, (len(result_grid), len(result_grid[0]))
+                )
+        return out, new_shapes
     h = shapes[:, 0].astype(np.int64)
     w = shapes[:, 1].astype(np.int64)
 
@@ -154,8 +178,14 @@ def batch_apply_operation(
         out = np.transpose(tensor, (0, 2, 1)).copy()
         new_shapes[:, 0], new_shapes[:, 1] = shapes[:, 1], shapes[:, 0]
     elif operation in {"REFLECT.ANTI_DIAGONAL", "INVERSE.REFLECT.ANTI_DIAGONAL"}:
-        transposed = np.transpose(tensor, (0, 2, 1))
-        out = np.flip(np.flip(transposed, axis=1), axis=2).copy()
+        rows = np.arange(30)[None, :, None]
+        cols = np.arange(30)[None, None, :]
+        valid = (rows < w[:, None, None]) & (cols < h[:, None, None])
+        source_rows = h[:, None, None] - 1 - cols
+        source_cols = w[:, None, None] - 1 - rows
+        out[valid] = tensor[np.broadcast_to(np.arange(n)[:, None, None], valid.shape),
+                            np.broadcast_to(source_rows, valid.shape),
+                            np.broadcast_to(source_cols, valid.shape)][valid]
         new_shapes[:, 0], new_shapes[:, 1] = shapes[:, 1], shapes[:, 0]
     elif operation in {"POLARITY.NEGATE", "COLOR.SWAP.0.1"}:
         lut = np.arange(10, dtype=np.int8)
@@ -190,14 +220,6 @@ def batch_apply_operation(
     else:
         raise ValueError(f"unsupported vectorized operation: {operation}")
 
-    if use_cache:
-        grids = _unpack(tensor, shapes)
-        results = _unpack(out, new_shapes)
-        for source, result in zip(grids, results):
-            key = _cache_key(source, operation)
-            if len(_OPERATION_CACHE) >= _OPERATION_CACHE_LIMIT:
-                _OPERATION_CACHE.clear()
-            _OPERATION_CACHE[key] = (result, (len(result), len(result[0])))
     return out, new_shapes
 
 
