@@ -10,6 +10,13 @@ A dependency-free, Python-first research solver for ARC-AGI-2-style grid tasks. 
 - No network access, credentials, API keys, or paid services required
 
 ## Run
+Use the single-file entry point:
+```bash
+python arc_solver.py --demo
+python arc_solver.py --dataset path/to/tasks.json --limit 20
+```
+
+The package CLI is also available:
 ```bash
 python -m unittest discover -s tests -v
 python -m arc_r2.cli --demo
@@ -23,6 +30,7 @@ python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
 The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
 
 ## Architecture
+- `arc_solver.py`: direct Python-script entry point.
 - `grid.py`: immutable grid validation and helpers.
 - `objects.py` and `relations.py`: four-connected object extraction and spatial relation graph.
 - `prte.py`: experimental dominant-background polarity reversal.
