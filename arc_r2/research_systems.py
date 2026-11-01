@@ -17,7 +17,7 @@ from typing import Callable, Iterable, Sequence
 from .dsl import Program
 from .grid import Grid, as_grid, colors, shape
 from .objects import GridObject, detect_objects
-from .relations import relation_graph
+from .relations import relation
 from .transforms import OPERATIONS, apply_operation
 
 
@@ -117,7 +117,7 @@ def build_scene_graph(grid: Grid) -> SceneGraph:
         for j, b in enumerate(objects):
             if i == j:
                 continue
-            labels = set(relation_graph((a, b))[0][2]) if relation_graph((a, b)) else set()
+            labels = set(relation(a, b))
             ar0, ac0, ar1, ac1 = a.bbox
             br0, bc0, br1, bc1 = b.bbox
             if br0 <= ar0 and bc0 <= ac0 and ar1 <= br1 and ac1 <= bc1:
