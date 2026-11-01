@@ -40,7 +40,7 @@ def inverse_of(name: str) -> str:
     }
     if name in pairs:
         return pairs[name]
-    if re.fullmatch(r"COLOR\\.SWAP\\.[0-9]\\.[0-9]", name):
+    if re.fullmatch(r"COLOR\.SWAP\.[0-9]\.[0-9]", name):
         return name
     raise ValueError(f"no known inverse for operation: {name}")
 
@@ -52,7 +52,7 @@ def apply_operation(g: Grid, name: str) -> Grid:
     if name == "REFLECT.ANTI_DIAGONAL": return reflect_anti_diagonal(g)
     if name == "POLARITY.NEGATE" or name == "COLOR.SWAP.0.1":
         return negate_polarity(g)
-    match = re.fullmatch(r"(?:INVERSE\\.)?COLOR\\.SWAP\\.([0-9])\\.([0-9])", name)
+    match = re.fullmatch(r"(?:INVERSE\.)?COLOR\.SWAP\.([0-9])\.([0-9])", name)
     if match:
         return swap_colors(g, int(match.group(1)), int(match.group(2)))
     if name == "PRTE.POLARITY.REVERSE":
