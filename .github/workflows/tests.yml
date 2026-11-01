@@ -21,3 +21,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Synthetic CLI smoke test
         run: python -m arc_r2.cli --demo --output /tmp/arc-r2-smoke
+      - name: Object DSL CLI smoke test
+        run: python -m arc_r2.cli --demo --engine object --candidate-cap 300 --output /tmp/arc-r2-object-smoke
