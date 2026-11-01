@@ -62,7 +62,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             limits = SearchLimits(
                 max_depth=max_depth,
                 candidate_cap=candidate_cap,
-                mcts_iterations=mcts_iterations,
+                mcts_iterations=0,
             )
             strategy = "qbs" if engine == "qbs" else "hybrid"
             result = HybridSolver(limits, strategy=strategy).solve(examples)
@@ -163,7 +163,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 "engines": {},
                 "diagnostics": {},
             }
-            for engine in ("baseline", "object", "qbs"):
+            for engine in ("baseline", "object", "qbs", "qbs_object"):
                 result = _predict(
                     engine, training_pairs, held_out,
                     max_depth, candidate_cap, mcts_iterations,
@@ -174,7 +174,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                         "method": "iterative_hybrid_search",
                         **result["qbs"],
                         "candidate_coverage": diagnose_candidates(
-                            "baseline", training_pairs, held_out,
+                            "object" if engine == "qbs_object" else "baseline", training_pairs, held_out,
                             max_depth=max_depth, candidate_cap=candidate_cap,
                         ),
                     }
@@ -196,6 +196,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "baseline_exact": task_exact["baseline"],
             "object_exact": task_exact["object"],
             "qbs_exact": task_exact["qbs"],
+            "qbs_object_exact": task_exact["qbs_object"],
         })
 
     summary = {}
@@ -219,7 +220,8 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
         "skipped_tasks_with_fewer_than_two_train_pairs": skipped,
         "max_depth": max_depth,
         "candidate_cap_per_fold": candidate_cap,
-        "mcts_iterations_per_baseline_fold": mcts_iterations,
+        "mcts_iterations_per_baseline_fold": 0,
+        "search_method": "deterministic QBS hypothesis generation and hybridization; MCTS disabled",
         "data_boundary": (
             "Only train input/output pairs are used. Each held-out train pair is "
             "scored after fitting on the other train pairs. The task test arrays "
