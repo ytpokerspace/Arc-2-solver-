@@ -30,7 +30,7 @@ For a local ARC JSON file (either a task list or the standard task-ID-to-task ma
 python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
 python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
 
-# Compare baseline and object engines using leave-one-training-pair-out validation
+# Compare baseline, HIAN, and object engines using leave-one-training-pair-out validation
 python -m arc_r2.compare_engines --dataset path/to/tasks.json --limit 20 --max-depth 2
 ```
 The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
@@ -46,10 +46,14 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `transforms.py`: distinct spatial, color/polarity, and inverse operators.
 - `dsl.py`: typed operation/program representation.
 - `search.py`: bounded Beam Search and UCT-guided MCTS.
-- `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid strategies.
+- `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid strategies, with optional HIAN reranking.
+- `hian.py`: evidence-backed hypothesis ranking, source-level support/contradiction tracking, and a hierarchy grouped by first transformation.
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
-- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline and object engines.
+- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, HIAN, and object engines.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
+
+## HIAN experiment
+HIAN is an optional meta-reasoning layer over the existing bounded grid candidate pool. It does not add operators or expand search. It evaluates candidate programs against named training examples, records exact-match support and contradictions, groups candidates into a simple concept hierarchy, and reranks by exact training matches, cell agreement, smoothed training-fit estimate, and simplicity. The confidence estimate is descriptive training evidence, not a calibrated probability of unseen-task success. Baseline behavior remains unchanged when `use_hian=False` (the default). The comparison runner reports baseline, HIAN, and object engines on identical leave-one-training-pair-out folds.
 
 ## Safety and reproducibility
 Search depth, candidate count, MCTS iterations, and task count are bounded. The program performs no network operations and has no API integration. It never modifies input datasets. JSONL logs are written only to the selected output directory (default: current directory's `arc_r2_runs/`). Use Ctrl-C to stop. An interrupted run records its state where possible.
