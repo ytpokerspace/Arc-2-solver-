@@ -7,6 +7,8 @@ from arc_r2.research_systems import (
     SafeDSLExecutor, SearchBudget, TaskDataManager, TaskRecord, build_scene_graph,
     calibration_metrics, cegis_refine, disagreement_report,
 )
+from arc_r2.search import SearchLimits
+from arc_r2.solver import Example, HybridSolver
 
 
 class TaskIsolationTests(unittest.TestCase):
@@ -109,6 +111,23 @@ class LearningAndTelemetryTests(unittest.TestCase):
         self.assertEqual(len(graph.nodes), 2)
         self.assertIn("LEFT_OF", graph.edges[0][2])
         self.assertTrue(all(node.size > 0 for node in graph.nodes))
+
+
+    def test_main_solver_returns_verification_and_provenance(self):
+        examples = (Example(as_grid([[0, 1]]), as_grid([[1, 0]])),)
+        result = HybridSolver(SearchLimits(max_depth=1, candidate_cap=40, mcts_iterations=5),
+                              strategy="beam").solve(examples)
+        self.assertTrue(result.verified_exact_fit)
+        self.assertTrue(result.verification["passed"])
+        self.assertTrue(result.candidate_provenance)
+        self.assertIn("elapsed_seconds", result.search_budget)
+
+    def test_main_solver_honors_zero_wall_clock_budget(self):
+        examples = (Example(as_grid([[0, 1]]), as_grid([[1, 0]])),)
+        result = HybridSolver(SearchLimits(max_depth=2, candidate_cap=40, mcts_iterations=5,
+                                           max_seconds=0.0), strategy="beam").solve(examples)
+        self.assertFalse(result.verified_exact_fit)
+        self.assertTrue(result.search_budget["beam"]["stopped_by_time"])
 
     def test_jsonl_telemetry_is_parseable(self):
         telemetry = JSONLTelemetry()
