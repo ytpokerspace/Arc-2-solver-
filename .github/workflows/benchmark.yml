@@ -11,7 +11,7 @@ on:
       task_limit:
         description: "Number of public training tasks to sample"
         required: false
-        default: "5"
+        default: "20"
 permissions:
   contents: read
 jobs:
@@ -33,7 +33,7 @@ jobs:
           python-version: "3.11"
       - name: Record benchmark source and run paired comparison
         env:
-          TASK_LIMIT: ${{ github.event.inputs.task_limit || '5' }}
+          TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
         run: |
           echo "ARC-AGI-2 source commit: f3283f727488ad98fe575ea6a5ac981e4a188e49"
           python -m arc_r2.compare_engines \
