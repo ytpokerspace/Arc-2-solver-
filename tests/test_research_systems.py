@@ -41,7 +41,7 @@ class ExecutionAndVerificationTests(unittest.TestCase):
 
     def test_verifier_requires_all_pairs_exact(self):
         examples = ((as_grid([[0, 1]]), as_grid([[1, 0]])),
-                    (as_grid([[0, 0]]), as_grid([[0, 0]])))
+                    (as_grid([[0, 0]]), as_grid([[1, 1]])))
         result = IndependentVerifier().verify(Program((Instruction("REVERSE.HORIZONTAL"),)), examples)
         self.assertFalse(result.passed)
         self.assertEqual(result.counterexample_indices, (1,))
@@ -99,7 +99,7 @@ class LearningAndTelemetryTests(unittest.TestCase):
         library = AbstractionLibrary(min_validation_tasks=3, min_exact_rate=0.8)
         program = Program((Instruction("REVERSE.HORIZONTAL"),))
         self.assertFalse(library.propose(program, [True, True]))
-        self.assertTrue(library.propose(program, [True, True, True, False]))
+        self.assertTrue(library.propose(program, [True, True, True, True]))
         item_id = library.export()[0]["abstraction_id"]
         library.record_reuse(item_id)
         self.assertEqual(library.export()[0]["reuse_count"], 1)
@@ -113,7 +113,7 @@ class LearningAndTelemetryTests(unittest.TestCase):
     def test_jsonl_telemetry_is_parseable(self):
         telemetry = JSONLTelemetry()
         telemetry.emit("candidate", candidate_id="abc", exact=False)
-        self.assertEqual(telemetry.to_jsonl().count("\\n"), 1)
+        self.assertEqual(telemetry.to_jsonl().count("\n"), 1)
         self.assertEqual(telemetry.summary()["event_count"], 1)
 
 
