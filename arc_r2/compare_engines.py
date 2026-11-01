@@ -147,7 +147,10 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
 
 
 def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
-                    candidate_cap: int = 1200) -> dict[str, Any]:
+                    candidate_cap: int = 1200,
+                    mcts_iterations: int | None = None) -> dict[str, Any]:
+    # Legacy keyword retained for callers; MCTS is deliberately never executed.
+    _ = mcts_iterations
     tasks = load_tasks(dataset, limit)
     eligible = [
         (task.get("task_id", str(index)), task)
