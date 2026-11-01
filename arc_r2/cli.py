@@ -28,6 +28,8 @@ def main(argv=None):
     parser.add_argument("--mcts-iterations", type=int, default=100)
     parser.add_argument("--output", type=Path, default=Path("arc_r2_runs"))
     args = parser.parse_args(argv)
+    if args.engine == "object" and args.strategy != "hybrid":
+        parser.error("--strategy applies to the baseline engine; object search has its own strategy")
     if args.limit < 1 or args.limit > 500 or args.max_depth < 1 or args.max_depth > 8:
         parser.error("limit must be 1..500 and max-depth 1..8")
     if args.candidate_cap < 1 or args.candidate_cap > 10000 or args.mcts_iterations < 0 or args.mcts_iterations > 5000:
@@ -78,12 +80,12 @@ def main(argv=None):
                     "program": str(result.program),
                     "train_exact": result.exact_examples, "train_total": result.total_examples,
                     "score": round(result.score, 6), "candidates": result.candidates_evaluated,
-                    "strategy": args.strategy, "qbs_rounds": result.qbs_rounds,
+                    "strategy": args.strategy, "qbs_rounds": getattr(result, "qbs_rounds", 0),
                     "test_predictions": predictions}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
                   f"program={result.program}; candidates={result.candidates_evaluated}; "
-                  f"qbs_rounds={result.qbs_rounds}")
+                  f"qbs_rounds={getattr(result, \"qbs_rounds\", 0)}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:
