@@ -2,11 +2,11 @@
 
 A dependency-free, Python-first research solver for ARC-AGI-2-style grid tasks. The initial implementation is deliberately conservative: it provides explicit grid operators, a small typed transformation DSL, bounded Beam Search, a UCT-guided Monte Carlo Tree Search (MCTS), cross-example evaluation, and reproducible local tests.
 
-**Research status:** prototype / baseline implementation. No ARC-AGI-2 training-set score is claimed. Synthetic tests are not official benchmark results.
+**Research status:** prototype / experimental solver. No ARC-AGI-2 leaderboard score is claimed. Synthetic tests are not official benchmark results.
 
 ## Requirements
 - Python 3.10+
-- Standard library only
+- NumPy and SciPy (`python -m pip install -r requirements.txt`)
 - No network access, credentials, API keys, or paid services required
 
 ## Run
@@ -23,6 +23,9 @@ The package CLI is also available:
 ```bash
 python -m unittest discover -s tests -v
 python -m arc_r2.cli --demo
+
+# Exact-fit filtering, D4/color-permutation TTA, and up to two distinct attempts
+python -m arc_r2.cli --engine robust --dataset path/to/tasks.json --limit 20 --max-depth 2
 ```
 
 For a local ARC JSON file (either a task list or the standard task-ID-to-task mapping, each task containing `train` and `test` arrays):
@@ -50,12 +53,18 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `hian.py`: evidence-backed hypothesis ranking, source-level support/contradiction tracking, and a hierarchy grouped by first transformation.
 - `emoji_codec.py`: reversible ARC color-to-emoji tokens and lossless emoji object graphs.
 - `emoji_alchemy.py`: symbolic DSL execution through emoji tokens, semantic signatures, and bounded candidate synthesis.
+- `robust_solver.py`: exact-fit candidate filtering, int8/30x30 NumPy batching, D4 plus color-permutation test-time augmentation, inverse voting, and structurally distinct two-attempt selection.
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
 - `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, HIAN, and object engines.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
 
 ## HIAN experiment
 HIAN is an optional meta-reasoning layer. In the Emoji Alchemy experiment, HIAN supplements the existing search candidates with all compositions of the current DSL operators up to depth two. Programs are evaluated through a reversible emoji-token representation and compared using color distributions, object shapes, object colors, spatial relations, coarse object locations, and dimensions. It records exact-match support and contradictions, groups hypotheses by first transformation, and ranks exact training matches first, then semantic similarity, cell agreement, a smoothed training-fit estimate, and simplicity. Semantic similarity is a ranking signal, never proof of correctness; only exact integer-grid reconstruction counts as a solved example. The confidence estimate is descriptive training evidence, not a calibrated probability of unseen-task success. Baseline behavior remains unchanged when `use_hian=False` (the default). The comparison runner reports baseline, HIAN, and object engines on identical leave-one-training-pair-out folds.
+
+## Exact-fit TTA experiment
+The optional `robust` engine retains a candidate only when its integer-grid output exactly matches **every** supplied training output. Survivors are deduplicated by their behavior on the full training set and ranked by shortest program length. It then solves rotated, reflected, and deterministically color-permuted versions of the task, inverts each augmentation on its prediction, and votes over reconstructed outputs. It emits at most two attempts: attempt 1 is the highest-voted output; attempt 2 must be a different output supported by a different transformation-family signature. If no structurally distinct alternative survives, only one attempt is returned. This is a bounded experiment, not a guarantee that an exact-fit program generalizes.
+
+Grid candidates are represented as `int8` tensors padded to 30x30 with `-1` as a sentinel. Geometry and color operations are batched with NumPy; repeated operation results are memoized by grid shape, bytes, and operation. Object extraction uses `scipy.ndimage.label` with four-connectivity when SciPy is installed (the portable Python fallback remains available).
 
 ## Safety and reproducibility
 Search depth, candidate count, MCTS iterations, and task count are bounded. The program performs no network operations and has no API integration. It never modifies input datasets. JSONL logs are written only to the selected output directory (default: current directory's `arc_r2_runs/`). Use Ctrl-C to stop. An interrupted run records its state where possible.
