@@ -85,7 +85,7 @@ def main(argv=None):
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
                   f"program={result.program}; candidates={result.candidates_evaluated}; "
-                  f"qbs_rounds={getattr(result, \"qbs_rounds\", 0)}")
+                  f"qbs_rounds={getattr(result, 'qbs_rounds', 0)}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:
