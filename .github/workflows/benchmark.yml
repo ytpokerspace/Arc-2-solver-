@@ -66,7 +66,6 @@ jobs:
             --limit "$TASK_LIMIT" \
             --max-depth 2 \
             --candidate-cap 500 \
-            --mcts-iterations 0 \
             --output arc_r2_engine_comparison.json
       - name: Upload comparison report
         if: always()
