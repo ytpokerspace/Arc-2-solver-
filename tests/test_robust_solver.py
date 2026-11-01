@@ -1,7 +1,10 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from arc_r2.dsl import Program, parse_program
 from arc_r2.grid import as_grid
+from arc_r2.object_dsl import ObjectProgram
 from arc_r2.transforms import apply_operation
 from arc_r2.robust_solver import (
     _OPERATION_CACHE,
@@ -90,6 +93,25 @@ class RobustSolverTests(unittest.TestCase):
             self.assertTrue(attempt["exact_training_fit"])
             self.assertGreater(attempt["votes"], 0)
             self.assertTrue(attempt["program_family"])
+
+    def test_object_search_runs_when_grid_dsl_has_no_exact_fit(self):
+        source = as_grid([[1, 0], [0, 0]])
+        # Force the independent grid candidate source to return no survivors.
+        object_result = SimpleNamespace(
+            program=ObjectProgram(),
+            candidates_evaluated=1,
+            exact_examples=1,
+        )
+        with patch("arc_r2.robust_solver.exact_fit_candidates", return_value=()), \\
+             patch("arc_r2.robust_solver.ObjectHybridSolver") as object_solver:
+            object_solver.return_value.solve.return_value = object_result
+            report = solve_two_attempts(((source, source),), source, max_depth=1)
+
+        self.assertEqual(object_solver.return_value.solve.call_count, report["views"])
+        self.assertGreater(report["object_candidates_evaluated"], 0)
+        self.assertEqual(report["views_with_exact_fit"], report["views"])
+        self.assertTrue(report["attempts"])
+        self.assertEqual(tuple(report["attempts"][0]["program_family"]), ("object:identity",))
 
     def test_second_attempt_must_have_different_family(self):
         source = as_grid([[1, 0], [0, 0]])
