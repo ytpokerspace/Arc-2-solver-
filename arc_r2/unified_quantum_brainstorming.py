@@ -69,6 +69,7 @@ class UnifiedHypothesis:
     def rank(self) -> tuple:
         return (
             float(self.exact == self.total),
+            self.probability_estimate,
             self.fit_rate,
             self.feasibility,
             self.cell_accuracy,
