@@ -102,7 +102,7 @@ class RobustSolverTests(unittest.TestCase):
             candidates_evaluated=1,
             exact_examples=1,
         )
-        with patch("arc_r2.robust_solver.exact_fit_candidates", return_value=()), \\
+        with patch("arc_r2.robust_solver.exact_fit_candidates", return_value=()), patch("arc_r2.robust_solver.ObjectHybridSolver") as object_solver:
              patch("arc_r2.robust_solver.ObjectHybridSolver") as object_solver:
             object_solver.return_value.solve.return_value = object_result
             report = solve_two_attempts(((source, source),), source, max_depth=1)
