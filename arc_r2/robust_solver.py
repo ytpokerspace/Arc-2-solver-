@@ -20,7 +20,7 @@ from .transforms import OPERATIONS
 
 PAD = np.int8(-1)
 MAX_SIDE = 30
-_COLOR_SWAP = re.compile(r"^COLOR\\.SWAP\\.(\\d+)\\.(\\d+)$")
+_COLOR_SWAP = re.compile(r"^COLOR\.SWAP\.(\d+)\.(\d+)$")
 _GEOMETRY = (
     "REVERSE.HORIZONTAL",
     "REVERSE.VERTICAL",
