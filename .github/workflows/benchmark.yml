@@ -4,6 +4,11 @@ on:
     branches: [main]
     paths:
       - "arc_r2/compare_engines.py"
+      - "arc_r2/solver.py"
+      - "arc_r2/search.py"
+      - "arc_r2/quantum_brainstorming.py"
+      - "arc_r2/cli.py"
+      - "tests/**"
       - "arc_r2/object_solver.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
@@ -31,6 +36,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Run correctness and Quantum Brainstorming gates
+        run: |
+          python -m unittest discover -s tests -v
+          python -m arc_r2.cli --demo --strategy qbs --max-depth 2 --candidate-cap 500 --output qbs-smoke
       - name: Record benchmark source and run paired comparison
         env:
           TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
