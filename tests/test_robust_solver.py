@@ -1,6 +1,6 @@
 import unittest
 
-from arc_r2.dsl import Program
+from arc_r2.dsl import Program, parse_program
 from arc_r2.grid import as_grid
 from arc_r2.transforms import apply_operation
 from arc_r2.robust_solver import (
@@ -47,6 +47,8 @@ class RobustSolverTests(unittest.TestCase):
         expected = tuple(program.apply(source) if program.canonical() != ("COLOR.SWAP.1.4",)
                          else ((4, 0, 2), (3, 1, 5)) for program in programs)
         self.assertEqual(actual, expected)
+        parsed_swap = parse_program("COLOR.SWAP.1.4")
+        self.assertEqual(parsed_swap.apply(source), actual[-1])
 
     def test_exact_filter_rejects_contradictory_training_pairs(self):
         source = as_grid([[1, 0], [0, 0]])
