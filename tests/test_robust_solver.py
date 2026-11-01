@@ -58,7 +58,7 @@ class RobustSolverTests(unittest.TestCase):
         source_a = as_grid([[1, 0, 0], [0, 2, 0]])
         target_a = as_grid([[0, 0, 1], [0, 2, 0]])
         source_b = as_grid([[0, 3, 0], [4, 0, 0]])
-        target_b = as_grid([[0, 0, 3], [0, 0, 4]])
+        target_b = as_grid([[0, 3, 0], [0, 0, 4]])
         survivors = exact_fit_candidates(((source_a, target_a), (source_b, target_b)))
         self.assertTrue(survivors)
         for candidate in survivors:
