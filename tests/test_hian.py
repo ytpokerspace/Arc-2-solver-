@@ -44,7 +44,7 @@ class HIANTests(unittest.TestCase):
         self.assertEqual(report["candidate_count"], 2)
         self.assertEqual(
             report["selected_hypothesis"]["program"],
-            ["REVERSE.HORIZONTAL"],
+            ("REVERSE.HORIZONTAL",),
         )
         self.assertIn("IDENTITY", report["hierarchy"])
         self.assertIn("REVERSE.HORIZONTAL", report["hierarchy"])
