@@ -78,7 +78,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             report = solve_two_attempts(
                 exact_examples, as_grid(held_out["input"]), max_depth=min(max_depth, 2)
             )
-            candidates = report["exact_fit_candidates_seen"]
+            candidates = report["exact_fit_candidates_seen"] + report["object_candidates_evaluated"]
             attempts = report["attempts"]
             expected = as_grid(held_out["output"])
             attempt_grids = tuple(as_grid(item["output"]) for item in attempts)
@@ -90,6 +90,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 "attempts": attempts,
                 "tta_views": report["views"],
                 "views_with_exact_fit": report["views_with_exact_fit"],
+                "object_candidates_evaluated": report["object_candidates_evaluated"],
                 "candidates": candidates,
                 "runtime_seconds": time.perf_counter() - started,
                 "error": None,
@@ -239,7 +240,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
         },
         "robust_tta_method": (
             "Each held-out fold uses D4 geometry views and deterministic palette relabelings. "
-            "Only programs exactly fitting every remaining training pair survive. Predictions "
+            "Only grid-DSL and object-DSL programs exactly fitting every remaining training pair survive. Predictions "
             "are inverse-transformed and voted. This pilot caps robust program depth at two; "
             "top-1 and within-two-attempt exact rates are reported separately."
         ),
