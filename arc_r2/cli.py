@@ -69,7 +69,7 @@ def main(argv=None):
                                         max_depth=min(args.max_depth, 2))
                     for case in task.get("test", [])
                 ]
-                item = {"task": index, "task_id": task.get("task_id), "engine": args.engine,
+                item = {"task": index, "task_id": task.get("task_id"), "engine": args.engine,
                         "program": "EXACT_FIT_TTA_VOTING",
                         "train_exact": None, "train_total": len(training_pairs),
                         "score": None,
