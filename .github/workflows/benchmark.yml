@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "arc_r2/compare_engines.py"
+      - "arc_r2/object_solver.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
