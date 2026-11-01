@@ -28,16 +28,20 @@ def _score(program: ObjectProgram, examples: tuple[ObjectExample, ...]) -> tuple
     matches = 0
     total = 0
     for example in examples:
+        # Count every target cell in the denominator. A failed or wrong-sized
+        # prediction must not improve its score by disappearing from evaluation.
+        total += sum(len(row) for row in example.output)
         try:
             predicted = program.apply(example.input)
         except (ValueError, TypeError, IndexError):
-            continue
+            # An instruction sequence that cannot be applied to every training
+            # example is invalid as a task-level hypothesis.
+            return -1.0, exact
         if predicted == example.output:
             exact += 1
         if len(predicted) == len(example.output) and len(predicted[0]) == len(example.output[0]):
             for predicted_row, target_row in zip(predicted, example.output):
                 matches += sum(a == b for a, b in zip(predicted_row, target_row))
-                total += len(target_row)
     cell_score = matches / total if total else 0.0
     return 0.90 * exact / len(examples) + 0.10 * cell_score, exact
 
@@ -92,7 +96,8 @@ class ObjectHybridSolver:
                         break
                     score, exact = _score(child, normalized)
                     evaluated += 1
-                    next_ranked.append((score - 0.002 * child.complexity, score, child, exact))
+                    if score >= 0.0:
+                        next_ranked.append((score - 0.002 * child.complexity, score, child, exact))
                     if (score, -child.complexity) > (best[0], -best[1].complexity):
                         best = (score, child)
                     if exact == len(normalized):
