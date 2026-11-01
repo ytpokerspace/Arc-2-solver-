@@ -25,7 +25,7 @@ class Hypothesis:
     feasible: bool
 
     @property
-    def rank(self) -> tuple[float, float, float, int]:
+    def rank(self) -> tuple[float, float, float, float]:
         # Exact training fit and executable feasibility outrank soft signals.
         return (
             float(self.fit_rate == 1.0),
