@@ -41,6 +41,8 @@ class ParameterizedObjectDslTests(unittest.TestCase):
         self.assertEqual(rotated[1][1], 3)
         scaled = ObjectProgram((ObjectInstruction("SCALE", 0, factor=2),)).apply(self.grid)
         self.assertEqual(sum(cell == 3 for row in scaled for cell in row), 12)
+        scaled_objects = object_descriptors(scaled)
+        self.assertEqual(scaled_objects[0]["bbox"], (1, 1, 4, 4))
 
     def test_bounds_and_collisions_fail_closed(self):
         with self.assertRaises(ValueError):
