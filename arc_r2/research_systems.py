@@ -140,17 +140,20 @@ class SearchBudget:
     max_program_depth: int = 4
     max_seconds: float = 10.0
     max_hybrids: int = 20
+    max_memory_bytes: int = 64 * 1024 * 1024
     started_at: float = field(default_factory=time.monotonic)
     expansions: int = 0
     executions: int = 0
     hybrids: int = 0
+    estimated_memory_bytes: int = 0
+    peak_estimated_memory_bytes: int = 0
     stopped_reason: str | None = None
 
     def __post_init__(self):
         if min(self.max_expansions, self.max_executions, self.max_program_depth, self.max_hybrids) < 0:
             raise ValueError("budget limits cannot be negative")
-        if self.max_seconds < 0:
-            raise ValueError("max_seconds cannot be negative")
+        if self.max_seconds < 0 or self.max_memory_bytes < 0:
+            raise ValueError("time and memory limits cannot be negative")
 
     def consume_expansion(self) -> bool:
         if self.expansions >= self.max_expansions:
@@ -182,9 +185,22 @@ class SearchBudget:
         self.hybrids += 1
         return True
 
+    def consume_memory(self, estimated_bytes: int) -> bool:
+        if estimated_bytes < 0:
+            raise ValueError("estimated memory cannot be negative")
+        if estimated_bytes > self.max_memory_bytes:
+            self.stopped_reason = "estimated_memory_budget"
+            return False
+        self.estimated_memory_bytes = estimated_bytes
+        self.peak_estimated_memory_bytes = max(self.peak_estimated_memory_bytes, estimated_bytes)
+        return True
+
     def snapshot(self) -> dict:
         return {"expansions": self.expansions, "executions": self.executions,
                 "hybrids": self.hybrids, "elapsed_seconds": round(time.monotonic()-self.started_at, 6),
+                "estimated_memory_bytes": self.estimated_memory_bytes,
+                "peak_estimated_memory_bytes": self.peak_estimated_memory_bytes,
+                "memory_limit_is_estimated_not_rss": True,
                 "stopped_reason": self.stopped_reason}
 
 
@@ -358,6 +374,20 @@ def cegis_refine(
     return CEGISResult(False, None, iterations, last_bad, rejected, reason)
 
 
+
+def compatible_hybrid(left: Program, right: Program, examples: Sequence[tuple[Grid, Grid]], *, max_depth: int = 8) -> tuple[Program | None, dict]:
+    """Concatenate two parent programs only when the composition exactly verifies."""
+    combined = Program(left.instructions + right.instructions)
+    if combined.complexity > max_depth:
+        return None, {"compatible": False, "reason": "depth_limit"}
+    result = IndependentVerifier(SafeDSLExecutor(max_depth=max_depth)).verify(combined, examples)
+    return (combined if result.passed else None), {
+        "compatible": result.passed, "exact_matches": result.exact_matches,
+        "total": result.total, "counterexample_indices": list(result.counterexample_indices),
+        "reason": "exact_training_verification" if result.passed else "training_counterexample",
+    }
+
+
 def disagreement_report(predictions: Sequence[Grid]) -> dict:
     """Quantify candidate disagreement without converting it into correctness."""
     if not predictions:
@@ -412,14 +442,17 @@ class AbstractionLibrary:
         self.min_exact_rate = min_exact_rate
         self.items: dict[str, Abstraction] = {}
 
-    def propose(self, program: Program, validation_outcomes: Sequence[bool]) -> bool:
-        if len(validation_outcomes) < self.min_validation_tasks:
+    def propose(self, program: Program, validation_outcomes: Sequence[tuple[str, bool]]) -> bool:
+        task_ids = [str(task_id) for task_id, _ in validation_outcomes]
+        if len(set(task_ids)) != len(task_ids):
+            raise ValueError("abstraction validation requires unique task IDs")
+        if len(task_ids) < self.min_validation_tasks:
             return False
-        exact = sum(bool(x) for x in validation_outcomes)
-        if exact / len(validation_outcomes) < self.min_exact_rate:
+        exact = sum(bool(correct) for _, correct in validation_outcomes)
+        if exact / len(task_ids) < self.min_exact_rate:
             return False
         key = CandidateLedger.fingerprint(program)
-        self.items.setdefault(key, Abstraction(key, program.canonical(), len(validation_outcomes), exact))
+        self.items.setdefault(key, Abstraction(key, program.canonical(), len(task_ids), exact))
         return True
 
     def record_reuse(self, abstraction_id: str) -> None:
