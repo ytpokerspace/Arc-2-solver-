@@ -32,7 +32,7 @@ For a local ARC JSON file (either a task list or the standard task-ID-to-task ma
 python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
 python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
 
-# Compare baseline and object engines using leave-one-training-pair-out validation
+# Compare baseline, object, and QBS engines using leave-one-training-pair-out validation
 python -m arc_r2.compare_engines --dataset path/to/tasks.json --limit 20 --max-depth 2
 ```
 The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
@@ -51,7 +51,7 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid/QBS strategies.
 - `quantum_brainstorming.py`: bounded ten-round hypothesis generation and ordered hybridization; exact training fit is prioritized, with a Beta(1,1)-smoothed training-fit probability estimate and executable feasibility reported alongside the heuristic score.
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
-- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline and object engines.
+- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, object, and QBS engines.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
 
 ## Safety and reproducibility
