@@ -50,7 +50,7 @@ def load_tasks(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
 
 
 def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
-             max_depth: int, candidate_cap: int, mcts_iterations: int) -> dict[str, Any]:
+             max_depth: int, candidate_cap: int) -> dict[str, Any]:
     started = time.perf_counter()
     candidates = 0
     try:
@@ -127,7 +127,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
 
 
 def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
-                    candidate_cap: int = 1200, mcts_iterations: int = 100) -> dict[str, Any]:
+                    candidate_cap: int = 1200) -> dict[str, Any]:
     tasks = load_tasks(dataset, limit)
     eligible = [
         (task.get("task_id", str(index)), task)
@@ -166,7 +166,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             for engine in ("baseline", "object", "qbs", "qbs_object"):
                 result = _predict(
                     engine, training_pairs, held_out,
-                    max_depth, candidate_cap, mcts_iterations,
+                    max_depth, candidate_cap,
                 )
                 fold["engines"][engine] = result
                 fold["diagnostics"][engine] = (
@@ -248,7 +248,6 @@ def main(argv=None) -> int:
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--candidate-cap", type=int, default=1200)
-    parser.add_argument("--mcts-iterations", type=int, default=100)
     parser.add_argument("--output", type=Path, default=Path("arc_r2_engine_comparison.json"))
     args = parser.parse_args(argv)
     if not args.dataset.exists() or not (args.dataset.is_file() or args.dataset.is_dir()):
@@ -264,7 +263,7 @@ def main(argv=None) -> int:
 
     report = compare_engines(
         args.dataset, args.limit, args.max_depth,
-        args.candidate_cap, args.mcts_iterations,
+        args.candidate_cap,
     )
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("ARC-R2 ENGINE COMPARISON | LOCAL FILE ONLY | TEST ANSWERS UNUSED")
