@@ -1,0 +1,51 @@
+name: ARC-R2 public training comparison
+on:
+  push:
+    branches: [main]
+    paths:
+      - "arc_r2/compare_engines.py"
+      - ".github/workflows/benchmark.yml"
+  workflow_dispatch:
+    inputs:
+      task_limit:
+        description: "Number of public training tasks to sample"
+        required: false
+        default: "5"
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out ARC-R2 solver
+        uses: actions/checkout@v4
+      - name: Check out pinned official ARC-AGI-2 training data
+        uses: actions/checkout@v4
+        with:
+          repository: arcprize/ARC-AGI-2
+          ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
+          path: arc-agi-2-data
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Record benchmark source and run paired comparison
+        env:
+          TASK_LIMIT: ${{ github.event.inputs.task_limit || '5' }}
+        run: |
+          echo "ARC-AGI-2 source commit: f3283f727488ad98fe575ea6a5ac981e4a188e49"
+          python -m arc_r2.compare_engines \
+            --dataset arc-agi-2-data/data/training \
+            --limit "$TASK_LIMIT" \
+            --max-depth 1 \
+            --candidate-cap 120 \
+            --mcts-iterations 20 \
+            --output arc_r2_engine_comparison.json
+      - name: Upload comparison report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-engine-comparison
+          path: arc_r2_engine_comparison.json
+          if-no-files-found: warn
