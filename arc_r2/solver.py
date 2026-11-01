@@ -132,6 +132,12 @@ class HybridSolver:
                 if candidate.canonical() not in combined:
                     combined[candidate.canonical()] = (0.0, candidate)
                     hian_extra_evaluations += 1
+                record = ledger.add(candidate, origin="hian")
+                checked = verifier.verify(candidate, tuple((ex.input, ex.output) for ex in examples))
+                record.exact_training_matches = checked.exact_matches
+                record.training_examples = checked.total
+                if not checked.passed:
+                    ledger.reject(record.candidate_id, "hian_candidate_not_exact_on_all_training_pairs")
             hian_report = analyze_hypotheses(
                 (candidate for _, candidate in combined.values()),
                 evidence_examples,
