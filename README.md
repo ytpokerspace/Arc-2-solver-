@@ -48,12 +48,14 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `search.py`: bounded Beam Search and UCT-guided MCTS.
 - `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid strategies, with optional HIAN reranking.
 - `hian.py`: evidence-backed hypothesis ranking, source-level support/contradiction tracking, and a hierarchy grouped by first transformation.
+- `emoji_codec.py`: reversible ARC color-to-emoji tokens and lossless emoji object graphs.
+- `emoji_alchemy.py`: symbolic DSL execution through emoji tokens, semantic signatures, and bounded candidate synthesis.
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
 - `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, HIAN, and object engines.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
 
 ## HIAN experiment
-HIAN is an optional meta-reasoning layer over the existing bounded grid candidate pool. It does not add operators or expand search. It evaluates candidate programs against named training examples, records exact-match support and contradictions, groups candidates into a simple concept hierarchy, and reranks by exact training matches, cell agreement, smoothed training-fit estimate, and simplicity. The confidence estimate is descriptive training evidence, not a calibrated probability of unseen-task success. Baseline behavior remains unchanged when `use_hian=False` (the default). The comparison runner reports baseline, HIAN, and object engines on identical leave-one-training-pair-out folds.
+HIAN is an optional meta-reasoning layer. In the Emoji Alchemy experiment, HIAN supplements the existing search candidates with all compositions of the current DSL operators up to depth two. Programs are evaluated through a reversible emoji-token representation and compared using color distributions, object shapes, object colors, spatial relations, coarse object locations, and dimensions. It records exact-match support and contradictions, groups hypotheses by first transformation, and ranks exact training matches first, then semantic similarity, cell agreement, a smoothed training-fit estimate, and simplicity. Semantic similarity is a ranking signal, never proof of correctness; only exact integer-grid reconstruction counts as a solved example. The confidence estimate is descriptive training evidence, not a calibrated probability of unseen-task success. Baseline behavior remains unchanged when `use_hian=False` (the default). The comparison runner reports baseline, HIAN, and object engines on identical leave-one-training-pair-out folds.
 
 ## Safety and reproducibility
 Search depth, candidate count, MCTS iterations, and task count are bounded. The program performs no network operations and has no API integration. It never modifies input datasets. JSONL logs are written only to the selected output directory (default: current directory's `arc_r2_runs/`). Use Ctrl-C to stop. An interrupted run records its state where possible.
