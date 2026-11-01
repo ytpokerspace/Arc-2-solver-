@@ -84,6 +84,7 @@ class RobustSolverTests(unittest.TestCase):
         report = solve_two_attempts(((source, target),), test_input, max_depth=1)
         self.assertEqual(report["views"], 24)
         self.assertGreater(report["views_with_exact_fit"], 0)
+        self.assertGreater(report["object_candidates_evaluated"], 0)
         self.assertLessEqual(len(report["attempts"]), 2)
         for attempt in report["attempts"]:
             self.assertTrue(attempt["exact_training_fit"])
