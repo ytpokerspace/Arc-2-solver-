@@ -240,6 +240,16 @@ class CandidateLedger:
         candidate_id = self.fingerprint(program)
         if candidate_id not in self.records:
             self.records[candidate_id] = CandidateRecord(candidate_id, program.canonical(), **metadata)
+        else:
+            record = self.records[candidate_id]
+            origin = metadata.get("origin")
+            if origin and origin not in record.origin.split("+"):
+                record.origin = "+".join(sorted(set(record.origin.split("+")) | {origin}))
+            record.qbs_scores.update(metadata.get("qbs_scores", {}))
+            if metadata.get("parent_id") and record.parent_id is None:
+                record.parent_id = metadata["parent_id"]
+            if metadata.get("hybrid_parents"):
+                record.hybrid_parents = tuple(sorted(set(record.hybrid_parents) | set(metadata["hybrid_parents"])))
         return self.records[candidate_id]
 
     def reject(self, candidate_id: str, reason: str) -> None:
