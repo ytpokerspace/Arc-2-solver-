@@ -6,6 +6,7 @@ from .grid import Grid
 from .objects import detect_objects
 from .relations import relation_graph
 from .search import SearchLimits, SearchStats, beam_search, mcts_search
+from .quantum_brainstorming import quantum_brainstorm_search
 
 @dataclass(frozen=True)
 class Example:
@@ -21,19 +22,28 @@ class SolveResult:
     candidates_evaluated: int
     beam_candidates: int
     mcts_candidates: int
+    qbs_rounds: int = 0
+    qbs_probability_estimate: float = 0.0
+    qbs_feasibility: float = 0.0
 
 def score_program(program: Program, examples: tuple[Example, ...], use_object_signal: bool = True) -> float:
-    if not examples: return 0.0
-    exact = sum(program.apply(ex.input) == ex.output for ex in examples)
+    """Score only executable candidates; invalid programs receive zero."""
+    if not examples:
+        return 0.0
+    predictions = []
+    try:
+        predictions = [program.apply(ex.input) for ex in examples]
+    except Exception:
+        return 0.0
+
+    exact = sum(predicted == ex.output for predicted, ex in zip(predictions, examples))
     # Exact match is the primary objective; a small cell agreement signal helps rank near misses.
     cell_total = 0
     cell_match = 0
     object_total = 0
     object_match = 0
     relation_scores = []
-    for ex in examples:
-        try: predicted = program.apply(ex.input)
-        except Exception: continue
+    for ex, predicted in zip(examples, predictions):
         if len(predicted) != len(ex.output) or len(predicted[0]) != len(ex.output[0]):
             continue
         for pr, tr in zip(predicted, ex.output):
@@ -59,8 +69,8 @@ def score_program(program: Program, examples: tuple[Example, ...], use_object_si
 
 class HybridSolver:
     def __init__(self, limits: SearchLimits | None = None, strategy: str = "hybrid", use_object_signal: bool = True):
-        if strategy not in {"hybrid", "beam", "mcts", "identity"}:
-            raise ValueError("strategy must be hybrid, beam, mcts, or identity")
+        if strategy not in {"hybrid", "beam", "mcts", "identity", "qbs"}:
+            raise ValueError("strategy must be hybrid, beam, mcts, identity, or qbs")
         self.limits = limits or SearchLimits()
         self.strategy = strategy
         self.use_object_signal = use_object_signal
@@ -72,6 +82,10 @@ class HybridSolver:
         scorer = lambda p: score_program(p, examples, self.use_object_signal)
         state_key = lambda p: tuple(p.apply(ex.input) for ex in examples)
         beam = beam_search(scorer, self.limits, beam_stats, state_key=state_key) if self.strategy in {"hybrid", "beam"} else []
+        if self.strategy == "qbs":
+            beam = quantum_brainstorm_search(
+                examples, self.limits, scorer, beam_stats, rounds=10, elite_size=4
+            )
         remaining = max(0, self.limits.candidate_cap - beam_stats.evaluated)
         mlimits = SearchLimits(
             beam_width=self.limits.beam_width, max_depth=self.limits.max_depth,
@@ -86,8 +100,17 @@ class HybridSolver:
         combined = {p.canonical(): (s, p) for s, p in beam + mcts}
         if not combined:
             combined[()] = (scorer(Program()), Program())
-        score, program = max(combined.values(), key=lambda item: (item[0], -item[1].complexity))
+        score, program = max(
+            combined.values(),
+            key=lambda item: (
+                sum(item[1].apply(ex.input) == ex.output for ex in examples),
+                item[0],
+                -item[1].complexity,
+            ),
+        )
         exact = sum(program.apply(ex.input) == ex.output for ex in examples)
         return SolveResult(program, score, exact, len(examples),
                            beam_stats.evaluated + mcts_stats.evaluated,
-                           len(beam), len(mcts))
+                           len(beam), len(mcts), beam_stats.qbs_rounds,
+                           (exact + 1) / (len(examples) + 2) if self.strategy == "qbs" else 0.0,
+                           1.0 if self.strategy == "qbs" else 0.0)

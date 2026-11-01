@@ -1,6 +1,7 @@
 import unittest
 
 from arc_r2.diagnostics import diagnose_candidates
+from arc_r2.dsl import Program
 from arc_r2.transforms import (
     negate_polarity,
     reverse_horizontal,
@@ -12,7 +13,7 @@ from arc_r2.transforms import (
 class R2DiagnosticTests(unittest.TestCase):
     def test_sanity_identity_and_core_grid_transforms(self):
         grid = ((1, 0, 0), (0, 2, 0), (0, 0, 0))
-        self.assertEqual(grid, grid)  # identity baseline
+        self.assertEqual(Program().apply(grid), grid)
         self.assertEqual(
             reverse_horizontal(grid),
             ((0, 0, 1), (0, 2, 0), (0, 0, 0)),
