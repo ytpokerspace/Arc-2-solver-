@@ -32,6 +32,12 @@ _GEOMETRY = (
 _OPERATION_CACHE: dict[tuple[tuple[int, int], bytes, str], tuple[Grid, tuple[int, int]]] = {}
 _OPERATION_CACHE_LIMIT = 50000
 
+# Keep enough room for the initial parameterized instruction set plus a
+# second search layer. candidate_cap must exceed parameter_cap + identity.
+OBJECT_SEARCH_MAX_DEPTH = 2
+OBJECT_SEARCH_PARAMETER_CAP = 120
+OBJECT_SEARCH_CANDIDATE_CAP = 240
+
 
 @dataclass(frozen=True)
 class ExactCandidate:
@@ -401,7 +407,9 @@ def solve_two_attempts(
                     ObjectExample(source, expected) for source, expected in augmented
                 )
                 object_result = ObjectHybridSolver(
-                    max_depth=2, candidate_cap=120, parameter_cap=120
+                    max_depth=OBJECT_SEARCH_MAX_DEPTH,
+                    candidate_cap=OBJECT_SEARCH_CANDIDATE_CAP,
+                    parameter_cap=OBJECT_SEARCH_PARAMETER_CAP,
                 ).solve(object_examples)
                 object_candidates_checked += object_result.candidates_evaluated
                 has_exact_fit = bool(candidates) or object_result.exact_examples == len(augmented)
