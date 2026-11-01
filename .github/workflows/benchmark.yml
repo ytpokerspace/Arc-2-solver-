@@ -58,8 +58,8 @@ jobs:
           python -m arc_r2.compare_engines \
             --dataset arc-agi-2-data/data/training \
             --limit "$TASK_LIMIT" \
-            --max-depth 1 \
-            --candidate-cap 120 \
+            --max-depth 2 \
+            --candidate-cap 500 \
             --mcts-iterations 20 \
             --output arc_r2_engine_comparison.json
       - name: Upload comparison report
