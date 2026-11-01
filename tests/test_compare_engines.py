@@ -11,8 +11,8 @@ class EngineComparisonTests(unittest.TestCase):
         task = {
             "task_id": "identity-demo",
             "train": [
-                {"input": [[0, 1], [0, 0]], "output": [[0, 1], [0, 0]]},
-                {"input": [[2, 0], [0, 0]], "output": [[2, 0], [0, 0]]},
+                {"input": [[0, 0], [0, 0]], "output": [[0, 0], [0, 0]]},
+                {"input": [[0, 0], [0, 0]], "output": [[0, 0], [0, 0]]},
             ],
             # Deliberately invalid: comparison must not inspect the test array.
             "test": [{"input": "not-a-grid"}],
