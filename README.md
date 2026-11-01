@@ -23,6 +23,10 @@ The package CLI is also available:
 ```bash
 python -m unittest discover -s tests -v
 python -m arc_r2.cli --demo
+
+# Compare integer, emoji-grid, and emoji-object round-trip representations
+python -m arc_r2.emoji_benchmark --repeats 50
+python -m arc_r2.emoji_benchmark --dataset path/to/tasks.json --limit 100 --repeats 50 --output emoji-report.json
 ```
 
 For a local ARC JSON file (either a task list or the standard task-ID-to-task mapping, each task containing `train` and `test` arrays):
@@ -50,6 +54,11 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
 - `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline and object engines.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
+- `emoji_codec.py`: lossless emoji-cell and emoji-object-graph views; integer grids remain canonical.
+- `emoji_benchmark.py`: three-way codec round-trip timing and serialized-size comparison; it does not measure solver accuracy.
+
+## Emoji representation experiment
+The isolated `experiment/emoji-grid-encoding` branch adds three comparable views: the existing integer grid, a one-emoji-per-cell grid, and an emoji-labeled connected-object graph with spatial relations. The codec benchmark checks exact reconstruction and reports conversion time and serialized JSON size. These are representation measurements only, not ARC solve-rate or search-speed results. See `research/EMOJI_REPRESENTATION_EXPERIMENT.md`.
 
 ## Safety and reproducibility
 Search depth, candidate count, MCTS iterations, and task count are bounded. The program performs no network operations and has no API integration. It never modifies input datasets. JSONL logs are written only to the selected output directory (default: current directory's `arc_r2_runs/`). Use Ctrl-C to stop. An interrupted run records its state where possible.
