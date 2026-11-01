@@ -90,6 +90,7 @@ class HybridSolver:
             candidate_cap=remaining, mcts_iterations=self.limits.mcts_iterations,
             exploration=self.limits.exploration, seed=self.limits.seed,
             include_prte=self.limits.include_prte,
+            max_seconds=max(0.0, self.limits.max_seconds - (time.monotonic() - started)),
         )
         mcts = mcts_search(scorer, mlimits, mcts_stats, state_key=state_key) if remaining and self.strategy in {"hybrid", "mcts"} else []
         if self.strategy == "identity":
