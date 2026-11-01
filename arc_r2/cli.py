@@ -20,12 +20,16 @@ def main(argv=None):
     parser.add_argument("--dataset", type=Path, help="local ARC-format JSON file; never downloaded")
     parser.add_argument("--engine", choices=("baseline", "object"), default="baseline",
                         help="baseline grid DSL or parameterized object DSL")
+    parser.add_argument("--strategy", choices=("hybrid", "beam", "mcts", "qbs"), default="hybrid",
+                        help="baseline strategy; qbs runs ten iterative hypothesis/hybrid rounds")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--max-depth", type=int, default=3)
     parser.add_argument("--candidate-cap", type=int, default=1200)
     parser.add_argument("--mcts-iterations", type=int, default=100)
     parser.add_argument("--output", type=Path, default=Path("arc_r2_runs"))
     args = parser.parse_args(argv)
+    if args.engine == "object" and args.strategy != "hybrid":
+        parser.error("--strategy applies to the baseline engine; object search has its own strategy")
     if args.limit < 1 or args.limit > 500 or args.max_depth < 1 or args.max_depth > 8:
         parser.error("limit must be 1..500 and max-depth 1..8")
     if args.candidate_cap < 1 or args.candidate_cap > 10000 or args.mcts_iterations < 0 or args.mcts_iterations > 5000:
@@ -46,13 +50,13 @@ def main(argv=None):
     if not isinstance(raw, list):
         parser.error("dataset must be a JSON list or ARC task-id mapping")
     args.output.mkdir(parents=True, exist_ok=True)
-    log_path = args.output / f"{args.engine}_run.jsonl"
+    log_path = args.output / f"{args.engine}_{args.strategy}_run.jsonl"
     limits = SearchLimits(max_depth=args.max_depth, candidate_cap=args.candidate_cap,
                           mcts_iterations=args.mcts_iterations)
     started = time.perf_counter()
     print("ARC-R2 | SAFETY: ACTIVE | NETWORK: DISABLED | PAID CALLS: 0")
     print("[PASS] Local input selected; no network or API integration")
-    print(f"[ENGINE] {args.engine}")
+    print(f"[ENGINE] {args.engine} | STRATEGY: {args.strategy}")
     results = []
     try:
         for index, task in enumerate(raw[:args.limit], 1):
@@ -68,7 +72,7 @@ def main(argv=None):
                 apply_program = result.program.apply
             else:
                 examples = _task_examples(task)
-                result = HybridSolver(limits).solve(examples)
+                result = HybridSolver(limits, strategy=args.strategy).solve(examples)
                 apply_program = result.program.apply
             predictions = [to_lists(apply_program(as_grid(case["input"])))
                            for case in task.get("test", [])]
@@ -76,10 +80,16 @@ def main(argv=None):
                     "program": str(result.program),
                     "train_exact": result.exact_examples, "train_total": result.total_examples,
                     "score": round(result.score, 6), "candidates": result.candidates_evaluated,
+                    "strategy": args.strategy, "qbs_rounds": getattr(result, "qbs_rounds", 0),
+                    "qbs_probability_estimate": getattr(result, "qbs_probability_estimate", 0.0),
+                    "qbs_feasibility": getattr(result, "qbs_feasibility", 0.0),
                     "test_predictions": predictions}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
-                  f"program={result.program}; candidates={result.candidates_evaluated}")
+                  f"program={result.program}; candidates={result.candidates_evaluated}; "
+                  f"qbs_rounds={getattr(result, 'qbs_rounds', 0)}; "
+                  f"qbs_probability={getattr(result, 'qbs_probability_estimate', 0.0):.3f}; "
+                  f"qbs_feasibility={getattr(result, 'qbs_feasibility', 0.0):.3f}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:

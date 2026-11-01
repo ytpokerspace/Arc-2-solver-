@@ -29,6 +29,7 @@ class SearchStats:
     beam_rounds: int = 0
     mcts_iterations: int = 0
     stopped_by_cap: bool = False
+    qbs_rounds: int = 0
 
 def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None, state_key: Callable[[Program], Hashable] | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
