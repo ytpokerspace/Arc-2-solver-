@@ -46,7 +46,7 @@ def parse_program(source: str) -> Program:
         if part.startswith("INVERSE."):
             base = part[len("INVERSE."):]
             part = "INVERSE." + inverse_of(base)
-        if part not in allowed and not part.startswith("INVERSE.") and not re.fullmatch(r"COLOR\\.SWAP\\.[0-9]\\.[0-9]", part):
+        if part not in allowed and not part.startswith("INVERSE.") and not re.fullmatch(r"COLOR\.SWAP\.[0-9]\.[0-9]", part):
             raise ValueError(f"unsupported DSL operation: {part}")
         instructions.append(Instruction(part))
     return Program(tuple(instructions))
