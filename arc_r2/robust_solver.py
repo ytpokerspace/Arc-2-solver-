@@ -368,7 +368,8 @@ def solve_two_attempts(
     if not rows:
         raise ValueError("at least one training pair is required")
     palette = tuple(sorted({color for pair in rows for grid in pair
-                            for row in grid for color in row}))
+                            for row in grid for color in row} |
+                           {color for row in test_grid for color in row}))
     allowed_palette = frozenset(palette)
     votes: dict[Grid, int] = defaultdict(int)
     supporting: dict[Grid, dict[tuple[str, ...], ExactCandidate]] = defaultdict(dict)
