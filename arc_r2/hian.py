@@ -126,8 +126,11 @@ def analyze_hypotheses(
     if top_k < 1:
         raise ValueError("top_k must be at least 1")
     example_rows = tuple(examples)
+    candidate_rows = tuple(candidates)
+    if not candidate_rows:
+        raise ValueError("at least one candidate hypothesis is required")
     unique: dict[tuple[str, ...], Program] = {}
-    for candidate in generate_alchemy_candidates(candidates, max_depth=2):
+    for candidate in generate_alchemy_candidates(candidate_rows, max_depth=2):
         unique.setdefault(candidate.canonical(), candidate)
     if not unique:
         raise ValueError("at least one candidate hypothesis is required")
