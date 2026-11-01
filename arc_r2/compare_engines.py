@@ -144,9 +144,9 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
     if not eligible:
         raise ValueError("no eligible tasks: leave-one-out comparison needs at least two train pairs per task")
 
-    engines = ("baseline", "hian", "object")
+    engines = ("baseline", "hian", "object", "robust_tta")
     totals = {
-        engine: {"folds": 0, "exact": 0, "candidates": 0,
+        engine: {"folds": 0, "exact": 0, "within_two_exact": 0, "candidates": 0,
                  "runtime_seconds": 0.0, "failures": 0}
         for engine in engines
     }
@@ -155,6 +155,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
     for task_id, task in eligible:
         task_exact = {engine: 0 for engine in engines}
+        task_within_two = {engine: 0 for engine in engines}
         task_folds = len(task["train"])
         for held_index, held_out in enumerate(task["train"]):
             training_pairs = tuple(
@@ -175,22 +176,30 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 fold["engines"][engine] = result
                 # HIAN and baseline share the same candidate generator; the
                 # diagnostic coverage audit therefore uses the baseline path.
-                diagnostic_engine = "baseline" if engine == "hian" else engine
-                fold["diagnostics"][engine] = diagnose_candidates(
-                    diagnostic_engine, training_pairs, held_out,
-                    max_depth=max_depth, candidate_cap=candidate_cap,
-                )
+                if engine == "robust_tta":
+                    fold["diagnostics"][engine] = {
+                        "method": "exact-fit TTA; only full-training-fit candidates are retained"
+                    }
+                else:
+                    diagnostic_engine = "baseline" if engine == "hian" else engine
+                    fold["diagnostics"][engine] = diagnose_candidates(
+                        diagnostic_engine, training_pairs, held_out,
+                        max_depth=max_depth, candidate_cap=candidate_cap,
+                    )
                 totals[engine]["folds"] += 1
                 totals[engine]["exact"] += int(result["exact"])
+                totals[engine]["within_two_exact"] += int(result.get("within_two_exact", result["exact"]))
                 totals[engine]["candidates"] += result["candidates"]
                 totals[engine]["runtime_seconds"] += result["runtime_seconds"]
                 totals[engine]["failures"] += int(result["error"] is not None)
                 task_exact[engine] += int(result["exact"])
+                task_within_two[engine] += int(result.get("within_two_exact", result["exact"]))
             fold_rows.append(fold)
         task_rows.append({
             "task_id": str(task_id),
             "held_out_pairs": task_folds,
             **{f"{engine}_exact": task_exact[engine] for engine in engines},
+            **{f"{engine}_within_two": task_within_two[engine] for engine in engines},
         })
 
     summary = {}
@@ -201,6 +210,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "held_out_exact_match_accuracy": values["exact"] / folds if folds else 0.0,
             "mean_candidates_per_fold": values["candidates"] / folds if folds else 0.0,
             "mean_runtime_seconds_per_fold": values["runtime_seconds"] / folds if folds else 0.0,
+            "within_two_exact_match_accuracy": values["within_two_exact"] / folds if folds else 0.0,
             "fully_generalized_tasks": sum(
                 row[f"{engine}_exact"] == row["held_out_pairs"] for row in task_rows
             ),
@@ -227,6 +237,12 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "rejected_invalid_candidates": "Candidates safely discarded because an operation could not be applied.",
             "duplicate_behaviors_removed": "Programs with identical outputs on all fit and held-out inputs; shortest program retained.",
         },
+        "robust_tta_method": (
+            "Each held-out fold uses D4 geometry views and deterministic palette relabelings. "
+            "Only programs exactly fitting every remaining training pair survive. Predictions "
+            "are inverse-transformed and voted. This pilot caps robust program depth at one; "
+            "top-1 and within-two-attempt exact rates are reported separately."
+        ),
         "hian_method": (
             "HIAN reranks the same bounded baseline candidate pool using exact "
             "training evidence first, then mean cell agreement, a Beta(1,1)-"
@@ -241,7 +257,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare ARC-R2 baseline, HIAN, and object engines with leave-one-out CV"
+        description="Compare ARC-R2 baseline, HIAN, object, and exact-fit TTA engines with leave-one-out CV"
     )
     parser.add_argument("--dataset", required=True, type=Path, help="local ARC JSON file")
     parser.add_argument("--limit", type=int, default=20)
