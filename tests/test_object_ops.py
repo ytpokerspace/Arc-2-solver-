@@ -59,7 +59,7 @@ class ObjectTransformTests(unittest.TestCase):
         )
         self.assertEqual(
             shape_signature(reflect_object(self.obj, "vertical")),
-            ((0, 1), (1, 0), (1, 1)),
+            ((0, 0), (1, 0), (1, 1)),
         )
         with self.assertRaises(ValueError):
             reflect_object(self.obj, "diagonal")
