@@ -1,6 +1,6 @@
 # ARC-2 Solver (ARC-R2)
 
-A dependency-free, Python-first research solver for ARC-AGI-2-style grid tasks. The initial implementation is deliberately conservative: it provides explicit grid operators, a small typed transformation DSL, bounded Beam Search, a UCT-guided Monte Carlo Tree Search (MCTS), cross-example evaluation, and reproducible local tests.
+A Python-first research solver for ARC-AGI-2-style grid tasks. The initial implementation is deliberately conservative: it provides explicit grid operators, a small typed transformation DSL, bounded Beam Search, a UCT-guided Monte Carlo Tree Search (MCTS), cross-example evaluation, and reproducible local tests.
 
 **Research status:** prototype / experimental solver. No ARC-AGI-2 leaderboard score is claimed. Synthetic tests are not official benchmark results.
 
@@ -33,7 +33,7 @@ For a local ARC JSON file (either a task list or the standard task-ID-to-task ma
 python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
 python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
 
-# Compare baseline, HIAN, and object engines using leave-one-training-pair-out validation
+# Compare baseline, HIAN, object, and robust-TTA engines using leave-one-training-pair-out validation
 python -m arc_r2.compare_engines --dataset path/to/tasks.json --limit 20 --max-depth 2
 ```
 The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
@@ -55,7 +55,7 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `emoji_alchemy.py`: symbolic DSL execution through emoji tokens, semantic signatures, and bounded candidate synthesis.
 - `robust_solver.py`: exact-fit candidate filtering, int8/30x30 NumPy batching, D4 plus color-permutation test-time augmentation, inverse voting, and structurally distinct two-attempt selection.
 - `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
-- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, HIAN, and object engines.
+- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline, HIAN, object, and robust-TTA engines; reports top-one and within-two accuracy.
 - `cli.py`: visible progress, local dataset runner, and safety limits.
 
 ## HIAN experiment
