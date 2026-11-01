@@ -2,6 +2,7 @@
 from __future__ import annotations
 import math
 import random
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Hashable
 from .dsl import Program
@@ -21,6 +22,13 @@ class SearchLimits:
     exploration: float = 1.414
     seed: int = 0
     include_prte: bool = True
+    max_seconds: float = 10.0
+
+    def __post_init__(self):
+        if self.beam_width < 1 or self.max_depth < 0 or self.candidate_cap < 0 or self.mcts_iterations < 0:
+            raise ValueError("search limits are outside valid bounds")
+        if self.max_seconds < 0:
+            raise ValueError("max_seconds cannot be negative")
 
 @dataclass
 class SearchStats:
@@ -29,9 +37,11 @@ class SearchStats:
     beam_rounds: int = 0
     mcts_iterations: int = 0
     stopped_by_cap: bool = False
+    stopped_by_time: bool = False
 
 def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None, state_key: Callable[[Program], Hashable] | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
+    started = time.monotonic()
     frontier = [Program()]
     seen = {()}
     score_cache: dict[Hashable, float] = {}
@@ -40,6 +50,9 @@ def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
         next_items = []
         for program in frontier:
             for op in _operations(limits):
+                if time.monotonic() - started >= limits.max_seconds:
+                    stats.stopped_by_time = True
+                    break
                 if stats.evaluated >= limits.candidate_cap:
                     stats.stopped_by_cap = True
                     break
@@ -65,7 +78,7 @@ def beam_search(score: Score, limits: SearchLimits, stats: SearchStats | None = 
         ranked.extend(next_items)
         frontier = [p for _, p in next_items[:limits.beam_width]]
         stats.beam_rounds += 1
-        if stats.stopped_by_cap: break
+        if stats.stopped_by_cap or stats.stopped_by_time: break
     unique = {p.canonical(): (s, p) for s, p in ranked}
     return sorted(unique.values(), key=lambda item: item[0] - 0.002 * item[1].complexity, reverse=True)
 
@@ -84,12 +97,16 @@ class _Node:
 
 def mcts_search(score: Score, limits: SearchLimits, stats: SearchStats | None = None, state_key: Callable[[Program], Hashable] | None = None) -> list[tuple[float, Program]]:
     stats = stats if stats is not None else SearchStats()
+    started = time.monotonic()
     rng = random.Random(limits.seed)
     operations = list(_operations(limits))
     root = _Node(Program(), untried=operations.copy())
     best: dict[tuple[str, ...], tuple[float, Program]] = {}
     score_cache: dict[Hashable, float] = {}
     for _ in range(limits.mcts_iterations):
+        if time.monotonic() - started >= limits.max_seconds:
+            stats.stopped_by_time = True
+            break
         node = root
         while not node.untried and node.children and node.program.complexity < limits.max_depth:
             node = max(node.children, key=lambda child: child.uct(node.visits, limits.exploration))
