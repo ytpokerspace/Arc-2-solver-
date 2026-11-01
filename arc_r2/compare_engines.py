@@ -17,6 +17,7 @@ from .diagnostics import diagnose_candidates
 from .grid import as_grid
 from .object_solver import ObjectExample, ObjectHybridSolver
 from .object_quantum_brainstorming import object_quantum_brainstorm_search
+from .unified_quantum_brainstorming import unified_qbs_search
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 
@@ -75,13 +76,32 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 "training_exact": result.exact_examples,
                 "training_total": result.total_examples,
                 "selected_program": str(result.program),
-            } if engine in {"qbs", "qbs_object"} else {}
+            } if engine in {"qbs", "qbs_object", "qbs_unified"} else {}
         else:
             examples = tuple(
                 ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
                 for pair in training_pairs
             )
-            if engine == "qbs_object":
+            if engine == "qbs_unified":
+                result = unified_qbs_search(
+                    examples,
+                    max_depth=min(max_depth, 5),
+                    candidate_cap=candidate_cap,
+                    parameter_cap=candidate_cap,
+                )
+                candidates = result.candidates_evaluated
+                qbs_metadata = {
+                    "rounds": result.rounds_completed,
+                    "probability_estimate": result.probability_estimate,
+                    "feasibility": result.feasibility,
+                    "training_exact": result.exact_examples,
+                    "training_total": result.total_examples,
+                    "selected_program": str(result.program),
+                    "fit_rate": result.fit_rate,
+                    "stopped_by_cap": result.stopped_by_cap,
+                    "retained_hypotheses": [str(program) for program in result.retained_hypotheses],
+                }
+            elif engine == "qbs_object":
                 result = object_quantum_brainstorm_search(
                     examples,
                     max_depth=min(max_depth, 4),
@@ -144,13 +164,13 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
     totals = {
         engine: {"folds": 0, "exact": 0, "candidates": 0, "runtime_seconds": 0.0, "failures": 0}
-        for engine in ("baseline", "object", "qbs", "qbs_object")
+        for engine in ("baseline", "object", "qbs", "qbs_object", "qbs_unified")
     }
     task_rows = []
     fold_rows = []
 
     for task_id, task in eligible:
-        task_exact = {"baseline": 0, "object": 0, "qbs": 0, "qbs_object": 0}
+        task_exact = {"baseline": 0, "object": 0, "qbs": 0, "qbs_object": 0, "qbs_unified": 0}
         task_folds = len(task["train"])
         for held_index, held_out in enumerate(task["train"]):
             training_pairs = tuple(
@@ -173,12 +193,15 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                     {
                         "method": "iterative_hybrid_search",
                         **result["qbs"],
-                        "candidate_coverage": diagnose_candidates(
-                            "object" if engine == "qbs_object" else "baseline", training_pairs, held_out,
-                            max_depth=max_depth, candidate_cap=candidate_cap,
+                        "candidate_coverage": (
+                            None if engine == "qbs_unified" else diagnose_candidates(
+                                "object" if engine == "qbs_object" else "baseline",
+                                training_pairs, held_out,
+                                max_depth=max_depth, candidate_cap=candidate_cap,
+                            )
                         ),
                     }
-                    if engine in {"qbs", "qbs_object"} else diagnose_candidates(
+                    if engine in {"qbs", "qbs_object", "qbs_unified"} else diagnose_candidates(
                         engine, training_pairs, held_out,
                         max_depth=max_depth, candidate_cap=candidate_cap,
                     )
@@ -197,6 +220,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "object_exact": task_exact["object"],
             "qbs_exact": task_exact["qbs"],
             "qbs_object_exact": task_exact["qbs_object"],
+            "qbs_unified_exact": task_exact["qbs_unified"],
         })
 
     summary = {}
@@ -242,7 +266,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare ARC-R2 baseline, object, grid-QBS, and object-DSL-QBS with leave-one-out CV"
+        description="Compare ARC-R2 baseline, object, grid-QBS, object-QBS, and unified QBS with leave-one-out CV"
     )
     parser.add_argument("--dataset", required=True, type=Path, help="local ARC JSON file")
     parser.add_argument("--limit", type=int, default=20)
