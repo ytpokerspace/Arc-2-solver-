@@ -41,6 +41,19 @@ class EngineComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "at least two train pairs"):
                 compare_engines(path, limit=1, candidate_cap=20)
 
+    def test_loader_accepts_directory_of_task_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "b-task.json").write_text(json.dumps({
+                "train": [{"input": [[0]], "output": [[0]]}], "test": []
+            }), encoding="utf-8")
+            (folder / "a-task.json").write_text(json.dumps({
+                "train": [{"input": [[1]], "output": [[1]]}], "test": []
+            }), encoding="utf-8")
+            loaded = load_tasks(folder, limit=1)
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0]["task_id"], "a-task")
+
     def test_loader_accepts_standard_task_mapping(self):
         tasks = {"abc": {"train": [
             {"input": [[0]], "output": [[0]]}
