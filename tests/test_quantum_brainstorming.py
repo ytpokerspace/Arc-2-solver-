@@ -31,6 +31,8 @@ class QuantumBrainstormingSolverTests(unittest.TestCase):
         self.assertEqual(result.exact_examples, 2)
         self.assertEqual(result.total_examples, 2)
         self.assertGreater(result.qbs_rounds, 0)
+        self.assertGreater(result.qbs_probability_estimate, 0.0)
+        self.assertEqual(result.qbs_feasibility, 1.0)
         for example in examples:
             self.assertEqual(result.program.apply(example.input), example.output)
 
