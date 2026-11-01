@@ -105,11 +105,17 @@ def apply_object_instruction(grid: Grid, instruction: ObjectInstruction) -> Grid
         raise ValueError("object_index is outside the detected object list")
     selected = objects[instruction.object_index]
     if instruction.operation == "SCALE":
-        transformed = scale_object(selected, instruction.factor)
+        transformed = place_object(
+            scale_object(selected, instruction.factor), selected.bbox[0], selected.bbox[1]
+        )
     elif instruction.operation == "ROTATE90":
-        transformed = rotate_object90(selected, instruction.turns)
+        transformed = place_object(
+            rotate_object90(selected, instruction.turns), selected.bbox[0], selected.bbox[1]
+        )
     elif instruction.operation == "REFLECT":
-        transformed = reflect_object(selected, instruction.axis)
+        transformed = place_object(
+            reflect_object(selected, instruction.axis), selected.bbox[0], selected.bbox[1]
+        )
     elif instruction.operation == "MOVE":
         transformed = move_object(selected, instruction.delta_row, instruction.delta_col)
     else:
