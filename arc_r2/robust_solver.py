@@ -17,6 +17,7 @@ import numpy as np
 from .dsl import Instruction, Program
 from .grid import Grid, as_grid
 from .transforms import OPERATIONS
+from .object_solver import ObjectExample, ObjectHybridSolver
 
 PAD = np.int8(-1)
 MAX_SIDE = 30
@@ -364,6 +365,7 @@ def solve_two_attempts(
     views = 0
     views_with_fit = 0
     candidates_checked = 0
+    object_candidates_checked = 0
 
     for rotation in range(4):
         for flip in (False, True):
@@ -394,6 +396,43 @@ def solve_two_attempts(
                         previous.complexity, previous.program
                     ):
                         per_view[prediction] = candidate
+                # Add the bounded object DSL as a second exact-fit candidate source.
+                # The object solver's score is not used for acceptance: every pair is
+                # rechecked by its exact_examples count before the program is admitted.
+                object_examples = tuple(
+                    ObjectExample(source, expected) for source, expected in augmented
+                )
+                object_result = ObjectHybridSolver(
+                    max_depth=2, candidate_cap=120, parameter_cap=120
+                ).solve(object_examples)
+                object_candidates_checked += object_result.candidates_evaluated
+                if object_result.exact_examples == len(augmented):
+                    object_prediction = object_result.program.apply(augmented_test)
+                    object_prediction = _inverse_geometry(
+                        object_prediction, rotation, flip
+                    )
+                    object_prediction = _invert_color_map(object_prediction, color_map)
+                    if _sane_output(object_prediction, allowed_palette):
+                        object_ops = tuple(
+                            str(instruction) for instruction in object_result.program.instructions
+                        )
+                        object_program = object_ops or ("OBJECT.IDENTITY",)
+                        object_family = tuple(
+                            "object:" + instruction.operation
+                            for instruction in object_result.program.instructions
+                        ) or ("object:identity",)
+                        object_candidate = ExactCandidate(
+                            program=object_program,
+                            outputs=tuple(expected for _, expected in augmented),
+                            complexity=object_result.program.complexity,
+                            family=object_family,
+                        )
+                        previous = per_view.get(object_prediction)
+                        if previous is None or (
+                            object_candidate.complexity, object_candidate.program
+                        ) < (previous.complexity, previous.program):
+                            per_view[object_prediction] = object_candidate
+
                 for prediction, candidate in per_view.items():
                     votes[prediction] += 1
                     supporting[prediction].setdefault(candidate.program, candidate)
@@ -432,6 +471,7 @@ def solve_two_attempts(
         "views": views,
         "views_with_exact_fit": views_with_fit,
         "exact_fit_candidates_seen": candidates_checked,
+        "object_candidates_evaluated": object_candidates_checked,
         "unique_outputs": len(votes),
         "attempts": [
             {
