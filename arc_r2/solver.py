@@ -21,6 +21,7 @@ class SolveResult:
     candidates_evaluated: int
     beam_candidates: int
     mcts_candidates: int
+    hian_report: dict | None = None
 
 def score_program(program: Program, examples: tuple[Example, ...], use_object_signal: bool = True) -> float:
     if not examples: return 0.0
@@ -58,12 +59,14 @@ def score_program(program: Program, examples: tuple[Example, ...], use_object_si
             + 0.05 * object_score + 0.03 * relation_score)
 
 class HybridSolver:
-    def __init__(self, limits: SearchLimits | None = None, strategy: str = "hybrid", use_object_signal: bool = True):
+    def __init__(self, limits: SearchLimits | None = None, strategy: str = "hybrid",
+                 use_object_signal: bool = True, use_hian: bool = False):
         if strategy not in {"hybrid", "beam", "mcts", "identity"}:
             raise ValueError("strategy must be hybrid, beam, mcts, or identity")
         self.limits = limits or SearchLimits()
         self.strategy = strategy
         self.use_object_signal = use_object_signal
+        self.use_hian = use_hian
 
     def solve(self, examples: tuple[Example, ...]) -> SolveResult:
         if not examples:
@@ -86,8 +89,27 @@ class HybridSolver:
         combined = {p.canonical(): (s, p) for s, p in beam + mcts}
         if not combined:
             combined[()] = (scorer(Program()), Program())
-        score, program = max(combined.values(), key=lambda item: (item[0], -item[1].complexity))
+
+        hian_report = None
+        if self.use_hian:
+            from .hian import analyze_hypotheses
+            evidence_examples = tuple(
+                (f"train-{index}", example.input, example.output)
+                for index, example in enumerate(examples)
+            )
+            hian_report = analyze_hypotheses(
+                (program for _, program in combined.values()),
+                evidence_examples,
+            )
+            selected = tuple(hian_report["selected_hypothesis"]["program"])
+            score, program = combined[selected]
+        else:
+            score, program = max(
+                combined.values(),
+                key=lambda item: (item[0], -item[1].complexity),
+            )
+
         exact = sum(program.apply(ex.input) == ex.output for ex in examples)
         return SolveResult(program, score, exact, len(examples),
                            beam_stats.evaluated + mcts_stats.evaluated,
-                           len(beam), len(mcts))
+                           len(beam), len(mcts), hian_report)

@@ -1,9 +1,9 @@
-"""Leave-one-out comparison of the baseline and object ARC engines.
+"""Leave-one-out comparison of baseline, HIAN, and object ARC engines.
 
-Only the task's supplied training pairs are used. Each fold holds one training
-pair out, fits on the remaining pairs, and scores the held-out pair. The task's
-official test array is deliberately never read. This is a small-data
-cross-validation diagnostic, not an official ARC-AGI-2 leaderboard score.
+Only supplied training pairs are used. Each fold holds one training pair out,
+fits on the remaining pairs, and scores the held-out pair. Test arrays are
+deliberately never read. This is a cross-validation diagnostic, not an official
+ARC-AGI-2 leaderboard score.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
     started = time.perf_counter()
     candidates = 0
     try:
-        if engine == "baseline":
+        if engine in {"baseline", "hian"}:
             examples = tuple(
                 Example(as_grid(pair["input"]), as_grid(pair["output"]))
                 for pair in training_pairs
@@ -63,9 +63,12 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 candidate_cap=candidate_cap,
                 mcts_iterations=mcts_iterations,
             )
-            result = HybridSolver(limits, strategy="hybrid").solve(examples)
+            result = HybridSolver(
+                limits, strategy="hybrid", use_hian=(engine == "hian")
+            ).solve(examples)
             candidates = result.candidates_evaluated
             prediction = result.program.apply(as_grid(held_out["input"]))
+            hian_report = result.hian_report
         else:
             examples = tuple(
                 ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
@@ -78,12 +81,14 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             ).solve(examples)
             candidates = result.candidates_evaluated
             prediction = result.program.apply(as_grid(held_out["input"]))
+            hian_report = None
         exact = prediction == as_grid(held_out["output"])
         return {
             "exact": exact,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": None,
+            "hian_report": hian_report,
         }
     except Exception as exc:
         return {
@@ -91,6 +96,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": f"{type(exc).__name__}: {exc}",
+            "hian_report": None,
         }
 
 
@@ -110,15 +116,17 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
     if not eligible:
         raise ValueError("no eligible tasks: leave-one-out comparison needs at least two train pairs per task")
 
+    engines = ("baseline", "hian", "object")
     totals = {
-        engine: {"folds": 0, "exact": 0, "candidates": 0, "runtime_seconds": 0.0, "failures": 0}
-        for engine in ("baseline", "object")
+        engine: {"folds": 0, "exact": 0, "candidates": 0,
+                 "runtime_seconds": 0.0, "failures": 0}
+        for engine in engines
     }
     task_rows = []
     fold_rows = []
 
     for task_id, task in eligible:
-        task_exact = {"baseline": 0, "object": 0}
+        task_exact = {engine: 0 for engine in engines}
         task_folds = len(task["train"])
         for held_index, held_out in enumerate(task["train"]):
             training_pairs = tuple(
@@ -131,14 +139,17 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 "engines": {},
                 "diagnostics": {},
             }
-            for engine in ("baseline", "object"):
+            for engine in engines:
                 result = _predict(
                     engine, training_pairs, held_out,
                     max_depth, candidate_cap, mcts_iterations,
                 )
                 fold["engines"][engine] = result
+                # HIAN and baseline share the same candidate generator; the
+                # diagnostic coverage audit therefore uses the baseline path.
+                diagnostic_engine = "baseline" if engine == "hian" else engine
                 fold["diagnostics"][engine] = diagnose_candidates(
-                    engine, training_pairs, held_out,
+                    diagnostic_engine, training_pairs, held_out,
                     max_depth=max_depth, candidate_cap=candidate_cap,
                 )
                 totals[engine]["folds"] += 1
@@ -151,8 +162,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
         task_rows.append({
             "task_id": str(task_id),
             "held_out_pairs": task_folds,
-            "baseline_exact": task_exact["baseline"],
-            "object_exact": task_exact["object"],
+            **{f"{engine}_exact": task_exact[engine] for engine in engines},
         })
 
     summary = {}
@@ -176,7 +186,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
         "skipped_tasks_with_fewer_than_two_train_pairs": skipped,
         "max_depth": max_depth,
         "candidate_cap_per_fold": candidate_cap,
-        "mcts_iterations_per_baseline_fold": mcts_iterations,
+        "mcts_iterations_per_baseline_and_hian_fold": mcts_iterations,
         "data_boundary": (
             "Only train input/output pairs are used. Each held-out train pair is "
             "scored after fitting on the other train pairs. The task test arrays "
@@ -189,6 +199,12 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "rejected_invalid_candidates": "Candidates safely discarded because an operation could not be applied.",
             "duplicate_behaviors_removed": "Programs with identical outputs on all fit and held-out inputs; shortest program retained.",
         },
+        "hian_method": (
+            "HIAN reranks the same bounded baseline candidate pool using exact "
+            "training evidence first, then mean cell agreement, a Beta(1,1)-"
+            "smoothed training-fit estimate, and program simplicity. Its estimate "
+            "is not a calibrated unseen-task probability."
+        ),
         "summary": summary,
         "per_task": task_rows,
         "folds": fold_rows,
@@ -197,7 +213,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare ARC-R2 baseline and object engines with leave-one-out CV"
+        description="Compare ARC-R2 baseline, HIAN, and object engines with leave-one-out CV"
     )
     parser.add_argument("--dataset", required=True, type=Path, help="local ARC JSON file")
     parser.add_argument("--limit", type=int, default=20)
@@ -211,7 +227,7 @@ def main(argv=None) -> int:
     if not 1 <= args.limit <= 500:
         parser.error("limit must be in 1..500")
     if not 1 <= args.max_depth <= 4:
-        parser.error("max-depth must be in 1..4 so both engines use a comparable depth")
+        parser.error("max-depth must be in 1..4 so both grid engines use a comparable depth")
     if not 1 <= args.candidate_cap <= 10000:
         parser.error("candidate-cap must be in 1..10000")
     if not 0 <= args.mcts_iterations <= 5000:

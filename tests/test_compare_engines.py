@@ -29,6 +29,9 @@ class EngineComparisonTests(unittest.TestCase):
         self.assertEqual(report["summary"]["object"]["folds"], 2)
         self.assertEqual(report["summary"]["baseline"]["exact"], 2)
         self.assertEqual(report["summary"]["object"]["exact"], 2)
+        self.assertEqual(report["summary"]["hian"]["folds"], 2)
+        self.assertEqual(report["summary"]["hian"]["exact"], 2)
+        self.assertIsNotNone(report["folds"][0]["engines"]["hian"]["hian_report"])
         self.assertIn("never read", report["data_boundary"])
 
     def test_single_pair_tasks_are_reported_as_skipped(self):

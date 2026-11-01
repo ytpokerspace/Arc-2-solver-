@@ -6,6 +6,12 @@ on:
       - "arc_r2/compare_engines.py"
       - "arc_r2/object_solver.py"
       - ".github/workflows/benchmark.yml"
+  pull_request:
+    paths:
+      - "arc_r2/compare_engines.py"
+      - "arc_r2/hian.py"
+      - "arc_r2/solver.py"
+      - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       task_limit:
@@ -39,7 +45,7 @@ jobs:
           python -m arc_r2.compare_engines \
             --dataset arc-agi-2-data/data/training \
             --limit "$TASK_LIMIT" \
-            --max-depth 1 \
+            --max-depth 2 \
             --candidate-cap 120 \
             --mcts-iterations 20 \
             --output arc_r2_engine_comparison.json
