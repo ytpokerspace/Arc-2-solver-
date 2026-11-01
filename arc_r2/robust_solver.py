@@ -407,12 +407,16 @@ def solve_two_attempts(
                 ).solve(object_examples)
                 object_candidates_checked += object_result.candidates_evaluated
                 if object_result.exact_examples == len(augmented):
-                    object_prediction = object_result.program.apply(augmented_test)
-                    object_prediction = _inverse_geometry(
-                        object_prediction, rotation, flip
-                    )
-                    object_prediction = _invert_color_map(object_prediction, color_map)
-                    if _sane_output(object_prediction, allowed_palette):
+                    try:
+                        object_prediction = object_result.program.apply(augmented_test)
+                    except (ValueError, TypeError, IndexError):
+                        object_prediction = None
+                    if object_prediction is not None:
+                        object_prediction = _inverse_geometry(
+                            object_prediction, rotation, flip
+                        )
+                        object_prediction = _invert_color_map(object_prediction, color_map)
+                    if object_prediction is not None and _sane_output(object_prediction, allowed_palette):
                         object_ops = tuple(
                             str(instruction) for instruction in object_result.program.instructions
                         )
