@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .grid import Grid
 from .object_dsl import (
-    ObjectInstruction, ObjectProgram, generate_object_instructions,
+    ObjectProgram, generate_object_instructions,
 )
 
 
@@ -63,7 +62,7 @@ def object_quantum_brainstorm_search(
     parameter_cap: int = 1200,
     max_offset: int = 2,
     rounds: int = 10,
-    elite_size: int = 12,
+    elite_size: int = 4,
 ) -> ObjectQBSResult:
     """Generate, rank, and hybridize object-DSL hypotheses deterministically."""
     if not examples:
