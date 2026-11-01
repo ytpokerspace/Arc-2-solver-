@@ -93,12 +93,18 @@ class HybridSolver:
         hian_report = None
         if self.use_hian:
             from .hian import analyze_hypotheses
+            from .emoji_alchemy import generate_alchemy_candidates
             evidence_examples = tuple(
                 (f"train-{index}", example.input, example.output)
                 for index, example in enumerate(examples)
             )
+            expanded = generate_alchemy_candidates(
+                (candidate for _, candidate in combined.values()), max_depth=2
+            )
+            for candidate in expanded:
+                combined.setdefault(candidate.canonical(), (scorer(candidate), candidate))
             hian_report = analyze_hypotheses(
-                (program for _, program in combined.values()),
+                (candidate for _, candidate in combined.values()),
                 evidence_examples,
             )
             selected = tuple(hian_report["selected_hypothesis"]["program"])
