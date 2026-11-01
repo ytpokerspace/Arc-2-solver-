@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 import json
 import math
+import re
 import time
 from typing import Callable, Iterable, Sequence
 
@@ -119,11 +120,10 @@ def build_scene_graph(grid: Grid) -> SceneGraph:
             labels = set(relation_graph((a, b))[0][2]) if relation_graph((a, b)) else set()
             ar0, ac0, ar1, ac1 = a.bbox
             br0, bc0, br1, bc1 = b.bbox
-            if max(ar0, br0) <= min(ar1, br1) and max(ac0, bc0) <= min(ac1, bc1):
-                if a.cells <= b.cells:
-                    labels.add("A_INSIDE_B")
-                if b.cells <= a.cells:
-                    labels.add("B_INSIDE_A")
+            if br0 <= ar0 and bc0 <= ac0 and ar1 <= br1 and ac1 <= bc1:
+                labels.add("A_INSIDE_B")
+            if ar0 <= br0 and ac0 <= bc0 and br1 <= ar1 and bc1 <= ac1:
+                labels.add("B_INSIDE_A")
             if not (ar1 < br0 or br1 < ar0 or ac1 < bc0 or bc1 < ac0):
                 if any(abs(r1-r2) + abs(c1-c2) == 1
                        for r1, c1 in a.cells for r2, c2 in b.cells):
@@ -204,9 +204,7 @@ class SafeDSLExecutor:
         result = source
         for instruction in program.instructions:
             operation = instruction.operation
-            if operation not in OPERATIONS and not (
-                operation.startswith("COLOR.SWAP.") and len(operation.split(".")) == 4
-            ):
+            if operation not in OPERATIONS and not re.fullmatch(r"COLOR\.SWAP\.[0-9]\.[0-9]", operation):
                 raise ValueError(f"operation is not in the approved DSL: {operation}")
             result = as_grid(apply_operation(result, operation))
             if max(shape(result)) > self.max_side:
@@ -327,7 +325,7 @@ def cegis_refine(
         seen.add(key)
         record = ledger.add(program, origin="cegis")
         started = time.monotonic()
-        if not budget.consume_execution(program.complexity * max(1, len(examples))):
+        if not budget.consume_execution(program.complexity):
             ledger.reject(record.candidate_id, budget.stopped_reason or "budget")
             break
         result = verifier.verify(program, examples)
