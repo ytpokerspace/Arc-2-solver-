@@ -1,11 +1,13 @@
 """Hybrid candidate coordinator and training-example evaluator."""
 from __future__ import annotations
 from dataclasses import dataclass
+import time
 from .dsl import Program
 from .grid import Grid
 from .objects import detect_objects
 from .relations import relation_graph
 from .search import SearchLimits, SearchStats, beam_search, mcts_search
+from .research_systems import CandidateLedger, IndependentVerifier, SafeDSLExecutor
 
 @dataclass(frozen=True)
 class Example:
@@ -22,6 +24,10 @@ class SolveResult:
     beam_candidates: int
     mcts_candidates: int
     hian_report: dict | None = None
+    verified_exact_fit: bool = False
+    verification: dict | None = None
+    candidate_provenance: list[dict] | None = None
+    search_budget: dict | None = None
 
 def score_program(program: Program, examples: tuple[Example, ...], use_object_signal: bool = True) -> float:
     if not examples: return 0.0
@@ -71,7 +77,10 @@ class HybridSolver:
     def solve(self, examples: tuple[Example, ...]) -> SolveResult:
         if not examples:
             raise ValueError("at least one training example is required")
+        started = time.monotonic()
         beam_stats, mcts_stats = SearchStats(), SearchStats()
+        ledger = CandidateLedger()
+        verifier = IndependentVerifier(SafeDSLExecutor(max_depth=self.limits.max_depth))
         scorer = lambda p: score_program(p, examples, self.use_object_signal)
         state_key = lambda p: tuple(p.apply(ex.input) for ex in examples)
         beam = beam_search(scorer, self.limits, beam_stats, state_key=state_key) if self.strategy in {"hybrid", "beam"} else []
@@ -92,6 +101,22 @@ class HybridSolver:
 
         hian_report = None
         hian_extra_evaluations = 0
+        # Preserve why each search candidate exists and whether it survives exact verification.
+        for score_value, candidate in beam:
+            record = ledger.add(candidate, origin="beam", qbs_scores={"search_score": float(score_value)})
+            checked = verifier.verify(candidate, tuple((ex.input, ex.output) for ex in examples))
+            record.exact_training_matches = checked.exact_matches
+            record.training_examples = checked.total
+            if not checked.passed:
+                ledger.reject(record.candidate_id, "not_exact_on_all_training_pairs")
+        for score_value, candidate in mcts:
+            record = ledger.add(candidate, origin="mcts", qbs_scores={"search_score": float(score_value)})
+            checked = verifier.verify(candidate, tuple((ex.input, ex.output) for ex in examples))
+            record.exact_training_matches = checked.exact_matches
+            record.training_examples = checked.total
+            if not checked.passed:
+                ledger.reject(record.candidate_id, "not_exact_on_all_training_pairs")
+
         if self.use_hian:
             from .hian import analyze_hypotheses
             from .emoji_alchemy import generate_alchemy_candidates
@@ -109,6 +134,7 @@ class HybridSolver:
             hian_report = analyze_hypotheses(
                 (candidate for _, candidate in combined.values()),
                 evidence_examples,
+                top_k=10,
             )
             selected = tuple(hian_report["selected_hypothesis"]["program"])
             _, program = combined[selected]
@@ -119,7 +145,25 @@ class HybridSolver:
                 key=lambda item: (item[0], -item[1].complexity),
             )
 
-        exact = sum(program.apply(ex.input) == ex.output for ex in examples)
+        final_check = verifier.verify(program, tuple((ex.input, ex.output) for ex in examples))
+        exact = final_check.exact_matches
+        selected_record = ledger.add(program, origin="selected")
+        selected_record.exact_training_matches = final_check.exact_matches
+        selected_record.training_examples = final_check.total
+        if not final_check.passed:
+            ledger.reject(selected_record.candidate_id, "selected_candidate_not_exact")
+        budget_report = {
+            "max_seconds": self.limits.max_seconds,
+            "elapsed_seconds": round(time.monotonic() - started, 6),
+            "beam": {"evaluated": beam_stats.evaluated, "stopped_by_cap": beam_stats.stopped_by_cap,
+                     "stopped_by_time": beam_stats.stopped_by_time},
+            "mcts": {"evaluated": mcts_stats.evaluated, "stopped_by_cap": mcts_stats.stopped_by_cap,
+                     "stopped_by_time": mcts_stats.stopped_by_time},
+        }
         return SolveResult(program, score, exact, len(examples),
                            beam_stats.evaluated + mcts_stats.evaluated + hian_extra_evaluations,
-                           len(beam), len(mcts), hian_report)
+                           len(beam), len(mcts), hian_report, final_check.passed,
+                           {"passed": final_check.passed, "exact_matches": final_check.exact_matches,
+                            "total": final_check.total, "counterexample_indices": list(final_check.counterexample_indices),
+                            "errors": list(final_check.errors)},
+                           ledger.export(), budget_report)
