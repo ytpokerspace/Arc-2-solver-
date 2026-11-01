@@ -7,6 +7,7 @@ object, color, shape, and relation analysis. Integer grids remain authoritative.
 from __future__ import annotations
 
 from collections import Counter
+from functools import lru_cache
 from itertools import product
 from typing import Iterable
 
@@ -34,6 +35,7 @@ def _counter_similarity(left: Counter, right: Counter) -> float:
     return intersection / union if union else 1.0
 
 
+@lru_cache(maxsize=50000)
 def semantic_signature(grid: Grid) -> dict:
     """Extract stable color, object-shape, and spatial-relation descriptors."""
     symbolic = encode_grid(grid)
