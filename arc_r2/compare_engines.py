@@ -18,6 +18,7 @@ from .grid import as_grid
 from .object_solver import ObjectExample, ObjectHybridSolver
 from .search import SearchLimits
 from .solver import Example, HybridSolver
+from .robust_solver import solve_two_attempts
 
 
 def load_tasks(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
@@ -69,6 +70,32 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             candidates = result.candidates_evaluated
             prediction = result.program.apply(as_grid(held_out["input"]))
             hian_report = result.hian_report
+        elif engine == "robust_tta":
+            exact_examples = tuple(
+                (as_grid(pair["input"]), as_grid(pair["output"]))
+                for pair in training_pairs
+            )
+            report = solve_two_attempts(
+                exact_examples, as_grid(held_out["input"]), max_depth=min(max_depth, 2)
+            )
+            candidates = report["exact_fit_candidates_seen"] + report["object_candidates_evaluated"]
+            attempts = report["attempts"]
+            expected = as_grid(held_out["output"])
+            attempt_grids = tuple(as_grid(item["output"]) for item in attempts)
+            exact = bool(attempt_grids and attempt_grids[0] == expected)
+            within_two = any(grid == expected for grid in attempt_grids)
+            return {
+                "exact": exact,
+                "within_two_exact": within_two,
+                "attempts": attempts,
+                "tta_views": report["views"],
+                "views_with_exact_fit": report["views_with_exact_fit"],
+                "object_candidates_evaluated": report["object_candidates_evaluated"],
+                "candidates": candidates,
+                "runtime_seconds": time.perf_counter() - started,
+                "error": None,
+                "hian_report": None,
+            }
         else:
             examples = tuple(
                 ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
@@ -85,6 +112,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
         exact = prediction == as_grid(held_out["output"])
         return {
             "exact": exact,
+            "within_two_exact": exact,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": None,
@@ -93,6 +121,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
     except Exception as exc:
         return {
             "exact": False,
+            "within_two_exact": False,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": f"{type(exc).__name__}: {exc}",
@@ -116,9 +145,9 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
     if not eligible:
         raise ValueError("no eligible tasks: leave-one-out comparison needs at least two train pairs per task")
 
-    engines = ("baseline", "hian", "object")
+    engines = ("baseline", "hian", "object", "robust_tta")
     totals = {
-        engine: {"folds": 0, "exact": 0, "candidates": 0,
+        engine: {"folds": 0, "exact": 0, "within_two_exact": 0, "candidates": 0,
                  "runtime_seconds": 0.0, "failures": 0}
         for engine in engines
     }
@@ -127,6 +156,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
     for task_id, task in eligible:
         task_exact = {engine: 0 for engine in engines}
+        task_within_two = {engine: 0 for engine in engines}
         task_folds = len(task["train"])
         for held_index, held_out in enumerate(task["train"]):
             training_pairs = tuple(
@@ -147,22 +177,30 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 fold["engines"][engine] = result
                 # HIAN and baseline share the same candidate generator; the
                 # diagnostic coverage audit therefore uses the baseline path.
-                diagnostic_engine = "baseline" if engine == "hian" else engine
-                fold["diagnostics"][engine] = diagnose_candidates(
-                    diagnostic_engine, training_pairs, held_out,
-                    max_depth=max_depth, candidate_cap=candidate_cap,
-                )
+                if engine == "robust_tta":
+                    fold["diagnostics"][engine] = {
+                        "method": "exact-fit TTA; only full-training-fit candidates are retained"
+                    }
+                else:
+                    diagnostic_engine = "baseline" if engine == "hian" else engine
+                    fold["diagnostics"][engine] = diagnose_candidates(
+                        diagnostic_engine, training_pairs, held_out,
+                        max_depth=max_depth, candidate_cap=candidate_cap,
+                    )
                 totals[engine]["folds"] += 1
                 totals[engine]["exact"] += int(result["exact"])
+                totals[engine]["within_two_exact"] += int(result.get("within_two_exact", result["exact"]))
                 totals[engine]["candidates"] += result["candidates"]
                 totals[engine]["runtime_seconds"] += result["runtime_seconds"]
                 totals[engine]["failures"] += int(result["error"] is not None)
                 task_exact[engine] += int(result["exact"])
+                task_within_two[engine] += int(result.get("within_two_exact", result["exact"]))
             fold_rows.append(fold)
         task_rows.append({
             "task_id": str(task_id),
             "held_out_pairs": task_folds,
             **{f"{engine}_exact": task_exact[engine] for engine in engines},
+            **{f"{engine}_within_two": task_within_two[engine] for engine in engines},
         })
 
     summary = {}
@@ -173,6 +211,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "held_out_exact_match_accuracy": values["exact"] / folds if folds else 0.0,
             "mean_candidates_per_fold": values["candidates"] / folds if folds else 0.0,
             "mean_runtime_seconds_per_fold": values["runtime_seconds"] / folds if folds else 0.0,
+            "within_two_exact_match_accuracy": values["within_two_exact"] / folds if folds else 0.0,
             "fully_generalized_tasks": sum(
                 row[f"{engine}_exact"] == row["held_out_pairs"] for row in task_rows
             ),
@@ -199,6 +238,12 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "rejected_invalid_candidates": "Candidates safely discarded because an operation could not be applied.",
             "duplicate_behaviors_removed": "Programs with identical outputs on all fit and held-out inputs; shortest program retained.",
         },
+        "robust_tta_method": (
+            "Each held-out fold uses D4 geometry views and deterministic palette relabelings. "
+            "Only grid-DSL and object-DSL programs exactly fitting every remaining training pair survive. Predictions "
+            "are inverse-transformed and voted. This pilot caps robust program depth at two; "
+            "top-1 and within-two-attempt exact rates are reported separately."
+        ),
         "hian_method": (
             "HIAN reranks the same bounded baseline candidate pool using exact "
             "training evidence first, then mean cell agreement, a Beta(1,1)-"
@@ -213,7 +258,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare ARC-R2 baseline, HIAN, and object engines with leave-one-out CV"
+        description="Compare ARC-R2 baseline, HIAN, object, and exact-fit TTA engines with leave-one-out CV"
     )
     parser.add_argument("--dataset", required=True, type=Path, help="local ARC JSON file")
     parser.add_argument("--limit", type=int, default=20)
@@ -246,7 +291,8 @@ def main(argv=None) -> int:
             f"({result['held_out_exact_match_accuracy']:.3%}); "
             f"{result['candidates']} candidates; "
             f"{result['runtime_seconds']:.3f}s; "
-            f"{result['failures']} failed folds"
+            f"{result['failures']} failed folds; "
+            f"within-two={result['within_two_exact']}/{result['folds']}"
         )
     print(f"[SAVED] {args.output}")
     return 0

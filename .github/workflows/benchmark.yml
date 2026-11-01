@@ -11,6 +11,10 @@ on:
       - "arc_r2/compare_engines.py"
       - "arc_r2/hian.py"
       - "arc_r2/solver.py"
+      - "arc_r2/robust_solver.py"
+      - "arc_r2/transforms.py"
+      - "arc_r2/objects.py"
+      - "requirements.txt"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
@@ -37,6 +41,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install numerical dependencies
+        run: python -m pip install -r requirements.txt
       - name: Record benchmark source and run paired comparison
         env:
           TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}

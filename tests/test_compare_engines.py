@@ -31,6 +31,9 @@ class EngineComparisonTests(unittest.TestCase):
         self.assertEqual(report["summary"]["object"]["exact"], 2)
         self.assertEqual(report["summary"]["hian"]["folds"], 2)
         self.assertEqual(report["summary"]["hian"]["exact"], 2)
+        self.assertEqual(report["summary"]["robust_tta"]["folds"], 2)
+        self.assertEqual(report["summary"]["robust_tta"]["exact"], 2)
+        self.assertEqual(report["summary"]["robust_tta"]["within_two_exact"], 2)
         self.assertIsNotNone(report["folds"][0]["engines"]["hian"]["hian_report"])
         self.assertIn("never read", report["data_boundary"])
 

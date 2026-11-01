@@ -41,11 +41,15 @@ class HIANTests(unittest.TestCase):
             [Program(), Program().then("REVERSE.HORIZONTAL")],
             [("train-0", source, expected)],
         )
-        self.assertEqual(report["candidate_count"], 2)
-        self.assertEqual(
-            report["selected_hypothesis"]["program"],
-            ("REVERSE.HORIZONTAL",),
-        )
+        self.assertGreater(report["candidate_count"], 2)
+        self.assertEqual(report["selected_hypothesis"]["exact_matches"], 1)
+        from arc_r2.dsl import parse_program
+        from arc_r2.emoji_alchemy import apply_emoji_program
+        from arc_r2.emoji_codec import decode_grid
+        selected = parse_program(" -> ".join(report["selected_hypothesis"]["program"]))
+        self.assertEqual(decode_grid(apply_emoji_program(source, selected)), expected)
+        self.assertGreater(report["candidate_count"], 2)
+        self.assertEqual(report["version"], "1.1-emoji-alchemy")
         self.assertIn("IDENTITY", report["hierarchy"])
         self.assertIn("REVERSE.HORIZONTAL", report["hierarchy"])
 
