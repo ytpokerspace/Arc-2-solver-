@@ -18,6 +18,7 @@ from .grid import as_grid
 from .object_solver import ObjectExample, ObjectHybridSolver
 from .search import SearchLimits
 from .solver import Example, HybridSolver
+from .robust_solver import solve_two_attempts
 
 
 def load_tasks(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
@@ -69,6 +70,31 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             candidates = result.candidates_evaluated
             prediction = result.program.apply(as_grid(held_out["input"]))
             hian_report = result.hian_report
+        elif engine == "robust_tta":
+            exact_examples = tuple(
+                (as_grid(pair["input"]), as_grid(pair["output"]))
+                for pair in training_pairs
+            )
+            report = solve_two_attempts(
+                exact_examples, as_grid(held_out["input"]), max_depth=1
+            )
+            candidates = report["exact_fit_candidates_seen"]
+            attempts = report["attempts"]
+            expected = as_grid(held_out["output"])
+            attempt_grids = tuple(as_grid(item["output"]) for item in attempts)
+            exact = bool(attempt_grids and attempt_grids[0] == expected)
+            within_two = any(grid == expected for grid in attempt_grids)
+            return {
+                "exact": exact,
+                "within_two_exact": within_two,
+                "attempts": attempts,
+                "tta_views": report["views"],
+                "views_with_exact_fit": report["views_with_exact_fit"],
+                "candidates": candidates,
+                "runtime_seconds": time.perf_counter() - started,
+                "error": None,
+                "hian_report": None,
+            }
         else:
             examples = tuple(
                 ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
@@ -85,6 +111,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
         exact = prediction == as_grid(held_out["output"])
         return {
             "exact": exact,
+            "within_two_exact": exact,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": None,
@@ -93,6 +120,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
     except Exception as exc:
         return {
             "exact": False,
+            "within_two_exact": False,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": f"{type(exc).__name__}: {exc}",
