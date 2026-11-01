@@ -81,11 +81,15 @@ def main(argv=None):
                     "train_exact": result.exact_examples, "train_total": result.total_examples,
                     "score": round(result.score, 6), "candidates": result.candidates_evaluated,
                     "strategy": args.strategy, "qbs_rounds": getattr(result, "qbs_rounds", 0),
+                    "qbs_probability_estimate": getattr(result, "qbs_probability_estimate", 0.0),
+                    "qbs_feasibility": getattr(result, "qbs_feasibility", 0.0),
                     "test_predictions": predictions}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
                   f"program={result.program}; candidates={result.candidates_evaluated}; "
-                  f"qbs_rounds={getattr(result, 'qbs_rounds', 0)}")
+                  f"qbs_rounds={getattr(result, 'qbs_rounds', 0)}; "
+                  f"qbs_probability={getattr(result, 'qbs_probability_estimate', 0.0):.3f}; "
+                  f"qbs_feasibility={getattr(result, 'qbs_feasibility', 0.0):.3f}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:
