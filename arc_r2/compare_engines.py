@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .diagnostics import diagnose_candidates
 from .grid import as_grid
 from .object_solver import ObjectExample, ObjectHybridSolver
 from .search import SearchLimits
@@ -84,7 +85,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             "runtime_seconds": time.perf_counter() - started,
             "error": None,
         }
-    except Exception as exc:  # record failed folds rather than silently dropping them
+    except Exception as exc:
         return {
             "exact": False,
             "candidates": candidates,
@@ -128,14 +129,18 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 "held_out_train_pair": held_index,
                 "fit_pair_count": len(training_pairs),
                 "engines": {},
+                "diagnostics": {},
             }
-            # Both engines see exactly the same fit pairs and held-out input.
             for engine in ("baseline", "object"):
                 result = _predict(
                     engine, training_pairs, held_out,
                     max_depth, candidate_cap, mcts_iterations,
                 )
                 fold["engines"][engine] = result
+                fold["diagnostics"][engine] = diagnose_candidates(
+                    engine, training_pairs, held_out,
+                    max_depth=max_depth, candidate_cap=candidate_cap,
+                )
                 totals[engine]["folds"] += 1
                 totals[engine]["exact"] += int(result["exact"])
                 totals[engine]["candidates"] += result["candidates"]
@@ -178,6 +183,12 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "are never read. This is cross-validation on provided training data, "
             "not official test accuracy."
         ),
+        "diagnostic_definitions": {
+            "train_fit_candidates": "Unique candidate behaviors that exactly reproduce every fit pair.",
+            "held_out_coverage_candidates": "Unique candidate behaviors that exactly reproduce the held-out output, regardless of solver ranking.",
+            "rejected_invalid_candidates": "Candidates safely discarded because an operation could not be applied.",
+            "duplicate_behaviors_removed": "Programs with identical outputs on all fit and held-out inputs; shortest program retained.",
+        },
         "summary": summary,
         "per_task": task_rows,
         "folds": fold_rows,
