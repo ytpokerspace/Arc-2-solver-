@@ -13,8 +13,10 @@ on:
       - "arc_r2/object_dsl.py"
       - "arc_r2/object_quantum_brainstorming.py"
       - "arc_r2/unified_quantum_brainstorming.py"
+      - "arc_r2/unified_quantum_brainstorming.py"
       - "arc_r2/object_dsl.py"
       - "arc_r2/object_quantum_brainstorming.py"
+      - "arc_r2/unified_quantum_brainstorming.py"
       - ".github/workflows/benchmark.yml"
   pull_request:
     paths:
@@ -27,6 +29,7 @@ on:
       - "arc_r2/object_solver.py"
       - "arc_r2/object_dsl.py"
       - "arc_r2/object_quantum_brainstorming.py"
+      - "arc_r2/unified_quantum_brainstorming.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
