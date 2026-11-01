@@ -94,7 +94,10 @@ def quantum_brainstorm_search(
 
     # Round zero: independently test every primitive and identity.
     evaluate(Program())
-    for operation in OPERATIONS:
+    operations = OPERATIONS if limits.include_prte else tuple(
+        operation for operation in OPERATIONS if operation != "PRTE.POLARITY.REVERSE"
+    )
+    for operation in operations:
         evaluate(Program().then(operation))
 
     elite = sorted(cache.values(), key=lambda item: item.rank, reverse=True)[:elite_size]
