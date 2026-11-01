@@ -84,7 +84,7 @@ class HybridSolver:
         beam = beam_search(scorer, self.limits, beam_stats, state_key=state_key) if self.strategy in {"hybrid", "beam"} else []
         if self.strategy == "qbs":
             beam = quantum_brainstorm_search(
-                examples, self.limits, scorer, beam_stats, rounds=10, elite_size=12
+                examples, self.limits, scorer, beam_stats, rounds=10, elite_size=4
             )
         remaining = max(0, self.limits.candidate_cap - beam_stats.evaluated)
         mlimits = SearchLimits(
