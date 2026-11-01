@@ -183,7 +183,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 "engines": {},
                 "diagnostics": {},
             }
-            for engine in ("baseline", "object", "qbs", "qbs_object"):
+            for engine in ("baseline", "object", "qbs", "qbs_object", "qbs_unified"):
                 result = _predict(
                     engine, training_pairs, held_out,
                     max_depth, candidate_cap,
@@ -282,8 +282,6 @@ def main(argv=None) -> int:
         parser.error("max-depth must be in 1..4 so both engines use a comparable depth")
     if not 1 <= args.candidate_cap <= 10000:
         parser.error("candidate-cap must be in 1..10000")
-    if not 0 <= args.mcts_iterations <= 5000:
-        parser.error("mcts-iterations must be in 0..5000")
 
     report = compare_engines(
         args.dataset, args.limit, args.max_depth,
