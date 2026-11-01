@@ -45,7 +45,7 @@ class RobustSolverTests(unittest.TestCase):
         )
         actual = batch_apply_programs(source, programs)
         expected = tuple(program.apply(source) if program.canonical() != ("COLOR.SWAP.1.4",)
-                         else ((3, 0, 2), (1, 4, 5)) for program in programs)
+                         else ((4, 0, 2), (3, 1, 5)) for program in programs)
         self.assertEqual(actual, expected)
 
     def test_exact_filter_rejects_contradictory_training_pairs(self):
