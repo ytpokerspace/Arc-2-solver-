@@ -76,7 +76,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 for pair in training_pairs
             )
             report = solve_two_attempts(
-                exact_examples, as_grid(held_out["input"]), max_depth=1
+                exact_examples, as_grid(held_out["input"]), max_depth=min(max_depth, 2)
             )
             candidates = report["exact_fit_candidates_seen"]
             attempts = report["attempts"]
@@ -240,7 +240,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
         "robust_tta_method": (
             "Each held-out fold uses D4 geometry views and deterministic palette relabelings. "
             "Only programs exactly fitting every remaining training pair survive. Predictions "
-            "are inverse-transformed and voted. This pilot caps robust program depth at one; "
+            "are inverse-transformed and voted. This pilot caps robust program depth at two; "
             "top-1 and within-two-attempt exact rates are reported separately."
         ),
         "hian_method": (
