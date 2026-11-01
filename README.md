@@ -14,6 +14,9 @@ Use the single-file entry point:
 ```bash
 python arc_solver.py --demo
 python arc_solver.py --dataset path/to/tasks.json --limit 20
+
+# Try the parameterized object-centric search engine
+python arc_solver.py --engine object --dataset path/to/tasks.json --limit 20
 ```
 
 The package CLI is also available:
@@ -33,6 +36,9 @@ The runner reads only the supplied local file. It does not download datasets. Pr
 - `arc_solver.py`: direct Python-script entry point.
 - `grid.py`: immutable grid validation and helpers.
 - `objects.py` and `relations.py`: four-connected object extraction and spatial relation graph.
+- `object_ops.py`: deterministic geometry transforms and shape/size descriptors.
+- `object_dsl.py`: parameterized object instructions, bounded candidate generation, and collision/bounds checks.
+- `object_solver.py`: bounded beam search over object-centric programs.
 - `prte.py`: experimental dominant-background polarity reversal.
 - `transforms.py`: distinct spatial, color/polarity, and inverse operators.
 - `dsl.py`: typed operation/program representation.
@@ -56,4 +62,4 @@ Search depth, candidate count, MCTS iterations, and task count are bounded. The 
 A task's training examples are used to select a program; test examples are predictions only and are never used for fitting. Reported accuracy must identify the dataset and split.
 
 ## Limitations
-The initial DSL is intentionally small and does not solve arbitrary ARC tasks. Richer object-centric program operators, official dataset ingestion validation, and evidence-based operator conclusions remain future work. The benchmark harness exists, but no ARC-AGI-2 dataset results are claimed. MCTS currently explores bounded operator sequences and shares the same evaluator as Beam Search; it is not a claim of optimal search.
+The baseline grid DSL is intentionally small. The experimental object DSL currently searches a bounded set of one- and two-step scale, rotate, reflect, move, and place programs. Object indices are based on deterministic connected-component ordering at each instruction step; this can be ambiguous when objects change order. Parameter generation is deliberately capped and does not cover every possible ARC transformation. Official dataset ingestion validation and evidence-based operator conclusions remain future work. The benchmark harness exists, but no ARC-AGI-2 dataset results are claimed. MCTS currently explores bounded operator sequences and shares the same evaluator as Beam Search; it is not a claim of optimal search.
