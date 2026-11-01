@@ -290,7 +290,8 @@ def main(argv=None) -> int:
             f"({result['held_out_exact_match_accuracy']:.3%}); "
             f"{result['candidates']} candidates; "
             f"{result['runtime_seconds']:.3f}s; "
-            f"{result['failures']} failed folds"
+            f"{result['failures']} failed folds; "
+            f"within-two={result['within_two_exact']}/{result['folds']}"
         )
     print(f"[SAVED] {args.output}")
     return 0
