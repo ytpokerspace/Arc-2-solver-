@@ -378,11 +378,9 @@ def solve_two_attempts(
                 )
                 candidates = exact_fit_candidates(augmented, max_depth=max_depth)
                 candidates_checked += len(candidates)
-                if not candidates:
-                    continue
-                views_with_fit += 1
                 augmented_test = _map_colors(_geometry(test_grid, rotation, flip), color_map)
-                # Each distinct exact-fit behavior gets one vote per augmented view.
+                # Grid and object DSLs are independent candidate sources. An empty
+                # grid-DSL result must never suppress the object-DSL search.
                 per_view: dict[Grid, ExactCandidate] = {}
                 for candidate in candidates:
                     program = Program(tuple(Instruction(op) for op in candidate.program))
@@ -406,6 +404,9 @@ def solve_two_attempts(
                     max_depth=2, candidate_cap=120, parameter_cap=120
                 ).solve(object_examples)
                 object_candidates_checked += object_result.candidates_evaluated
+                has_exact_fit = bool(candidates) or object_result.exact_examples == len(augmented)
+                if has_exact_fit:
+                    views_with_fit += 1
                 if object_result.exact_examples == len(augmented):
                     try:
                         object_prediction = object_result.program.apply(augmented_test)
