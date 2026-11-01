@@ -80,7 +80,7 @@ def main() -> None:
     if args.output:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\\n", encoding="utf-8")
+        output.write_text(rendered + chr(10), encoding="utf-8")
 
 
 if __name__ == "__main__":
