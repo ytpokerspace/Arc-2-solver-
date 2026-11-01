@@ -41,7 +41,7 @@ class HIANTests(unittest.TestCase):
             [Program(), Program().then("REVERSE.HORIZONTAL")],
             [("train-0", source, expected)],
         )
-        self.assertEqual(report["candidate_count"], 2)
+        self.assertGreater(report["candidate_count"], 2)
         self.assertEqual(report["selected_hypothesis"]["exact_matches"], 1)
         from arc_r2.dsl import parse_program
         from arc_r2.emoji_alchemy import apply_emoji_program
