@@ -21,16 +21,17 @@ from .transforms import OPERATIONS
 class Hypothesis:
     program: Program
     fit_rate: float
+    estimated_probability: float
+    feasibility: float
     heuristic_score: float
-    feasible: bool
 
     @property
     def rank(self) -> tuple[float, float, float, float]:
         # Exact training fit and executable feasibility outrank soft signals.
         return (
             float(self.fit_rate == 1.0),
-            self.fit_rate,
-            float(self.feasible),
+            self.estimated_probability,
+            self.feasibility,
             self.heuristic_score - 0.002 * self.program.complexity,
         )
 
@@ -78,15 +79,19 @@ def quantum_brainstorm_search(
             stats.expanded += 1
             return None
 
-        fit_rate = sum(
+        exact_count = sum(
             prediction == example.output
             for prediction, example in zip(predictions, examples)
-        ) / len(examples)
+        )
+        fit_rate = exact_count / len(examples)
+        # Beta(1, 1) smoothing: an engineering estimate from observed fit,
+        # not a calibrated estimate of unseen ARC-task success.
+        estimated_probability = (exact_count + 1) / (len(examples) + 2)
         try:
             heuristic = float(score(program))
         except Exception:
             heuristic = 0.0
-        hypothesis = Hypothesis(program, fit_rate, heuristic, True)
+        hypothesis = Hypothesis(program, fit_rate, estimated_probability, 1.0, heuristic)
         cache[key] = hypothesis
         stats.evaluated += 1
         stats.expanded += 1
