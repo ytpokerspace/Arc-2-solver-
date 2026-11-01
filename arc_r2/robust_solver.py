@@ -32,6 +32,12 @@ _GEOMETRY = (
 _OPERATION_CACHE: dict[tuple[tuple[int, int], bytes, str], tuple[Grid, tuple[int, int]]] = {}
 _OPERATION_CACHE_LIMIT = 50000
 
+# Keep enough room for the initial parameterized instruction set plus a
+# second search layer. candidate_cap must exceed parameter_cap + identity.
+OBJECT_SEARCH_MAX_DEPTH = 2
+OBJECT_SEARCH_PARAMETER_CAP = 120
+OBJECT_SEARCH_CANDIDATE_CAP = 240
+
 
 @dataclass(frozen=True)
 class ExactCandidate:
@@ -378,11 +384,9 @@ def solve_two_attempts(
                 )
                 candidates = exact_fit_candidates(augmented, max_depth=max_depth)
                 candidates_checked += len(candidates)
-                if not candidates:
-                    continue
-                views_with_fit += 1
                 augmented_test = _map_colors(_geometry(test_grid, rotation, flip), color_map)
-                # Each distinct exact-fit behavior gets one vote per augmented view.
+                # Grid and object DSLs are independent candidate sources. An empty
+                # grid-DSL result must never suppress the object-DSL search.
                 per_view: dict[Grid, ExactCandidate] = {}
                 for candidate in candidates:
                     program = Program(tuple(Instruction(op) for op in candidate.program))
@@ -403,9 +407,14 @@ def solve_two_attempts(
                     ObjectExample(source, expected) for source, expected in augmented
                 )
                 object_result = ObjectHybridSolver(
-                    max_depth=2, candidate_cap=120, parameter_cap=120
+                    max_depth=OBJECT_SEARCH_MAX_DEPTH,
+                    candidate_cap=OBJECT_SEARCH_CANDIDATE_CAP,
+                    parameter_cap=OBJECT_SEARCH_PARAMETER_CAP,
                 ).solve(object_examples)
                 object_candidates_checked += object_result.candidates_evaluated
+                has_exact_fit = bool(candidates) or object_result.exact_examples == len(augmented)
+                if has_exact_fit:
+                    views_with_fit += 1
                 if object_result.exact_examples == len(augmented):
                     try:
                         object_prediction = object_result.program.apply(augmented_test)
