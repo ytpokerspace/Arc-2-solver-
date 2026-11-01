@@ -23,6 +23,8 @@ class SolveResult:
     beam_candidates: int
     mcts_candidates: int
     qbs_rounds: int = 0
+    qbs_probability_estimate: float = 0.0
+    qbs_feasibility: float = 0.0
 
 def score_program(program: Program, examples: tuple[Example, ...], use_object_signal: bool = True) -> float:
     """Score only executable candidates; invalid programs receive zero."""
@@ -109,4 +111,6 @@ class HybridSolver:
         exact = sum(program.apply(ex.input) == ex.output for ex in examples)
         return SolveResult(program, score, exact, len(examples),
                            beam_stats.evaluated + mcts_stats.evaluated,
-                           len(beam), len(mcts), beam_stats.qbs_rounds)
+                           len(beam), len(mcts), beam_stats.qbs_rounds,
+                           (exact + 1) / (len(examples) + 2) if self.strategy == "qbs" else 0.0,
+                           1.0 if self.strategy == "qbs" else 0.0)
