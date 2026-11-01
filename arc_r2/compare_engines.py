@@ -71,6 +71,9 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 "rounds": result.qbs_rounds,
                 "probability_estimate": result.qbs_probability_estimate,
                 "feasibility": result.qbs_feasibility,
+                "training_exact": result.exact_examples,
+                "training_total": result.total_examples,
+                "selected_program": str(result.program),
             } if engine == "qbs" else {}
         else:
             qbs_metadata = {}
@@ -147,7 +150,14 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 )
                 fold["engines"][engine] = result
                 fold["diagnostics"][engine] = (
-                    {"method": "iterative_hybrid_search", **result["qbs"]}
+                    {
+                        "method": "iterative_hybrid_search",
+                        **result["qbs"],
+                        "candidate_coverage": diagnose_candidates(
+                            "baseline", training_pairs, held_out,
+                            max_depth=max_depth, candidate_cap=candidate_cap,
+                        ),
+                    }
                     if engine == "qbs" else diagnose_candidates(
                         engine, training_pairs, held_out,
                         max_depth=max_depth, candidate_cap=candidate_cap,
