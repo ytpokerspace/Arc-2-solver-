@@ -65,6 +65,9 @@ class ProvenanceAndBudgetTests(unittest.TestCase):
         self.assertTrue(budget.consume_expansion())
         self.assertFalse(budget.consume_expansion())
         self.assertEqual(budget.stopped_reason, "expansion_budget")
+        self.assertTrue(budget.consume_memory(1024))
+        self.assertFalse(budget.consume_memory(1024 * 1024))
+        self.assertEqual(budget.stopped_reason, "estimated_memory_budget")
         self.assertTrue(budget.consume_hybrid())
         self.assertFalse(budget.consume_hybrid())
 
@@ -100,8 +103,10 @@ class LearningAndTelemetryTests(unittest.TestCase):
     def test_abstraction_requires_multiple_validation_tasks(self):
         library = AbstractionLibrary(min_validation_tasks=3, min_exact_rate=0.8)
         program = Program((Instruction("REVERSE.HORIZONTAL"),))
-        self.assertFalse(library.propose(program, [True, True]))
+        self.assertFalse(library.propose(program, [("task-a", True), ("task-b", True)]))
         self.assertTrue(library.propose(program, [True, True, True, True]))
+        with self.assertRaises(ValueError):
+            library.propose(program, [("task-a", True), ("task-a", True), ("task-b", True)])
         item_id = library.export()[0]["abstraction_id"]
         library.record_reuse(item_id)
         self.assertEqual(library.export()[0]["reuse_count"], 1)
