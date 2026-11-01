@@ -5,7 +5,7 @@ from arc_r2.grid import as_grid
 from arc_r2.research_systems import (
     AbstractionLibrary, CandidateLedger, IndependentVerifier, JSONLTelemetry,
     SafeDSLExecutor, SearchBudget, TaskDataManager, TaskRecord, build_scene_graph,
-    calibration_metrics, cegis_refine, disagreement_report,
+    calibration_metrics, cegis_refine, disagreement_report, compatible_hybrid,
 )
 from arc_r2.search import SearchLimits
 from arc_r2.solver import Example, HybridSolver
@@ -56,6 +56,7 @@ class ProvenanceAndBudgetTests(unittest.TestCase):
         first = ledger.add(program, origin="beam")
         second = ledger.add(program, origin="mcts")
         self.assertEqual(first.candidate_id, second.candidate_id)
+        self.assertIn("mcts", second.origin)
         ledger.reject(first.candidate_id, "counterexample:0")
         self.assertEqual(ledger.export()[0]["rejection_reason"], "counterexample:0")
 
@@ -133,6 +134,17 @@ class LearningAndTelemetryTests(unittest.TestCase):
                                            max_seconds=0.0), strategy="beam").solve(examples)
         self.assertFalse(result.verified_exact_fit)
         self.assertTrue(result.search_budget["beam"]["stopped_by_time"])
+
+
+    def test_hybrid_must_pass_exact_training_verification(self):
+        example = ((as_grid([[0, 1]]), as_grid([[1, 0]])),)
+        reverse = Program((Instruction("REVERSE.HORIZONTAL"),))
+        accepted, report = compatible_hybrid(Program(), reverse, example)
+        self.assertEqual(accepted, reverse)
+        self.assertTrue(report["compatible"])
+        rejected, bad_report = compatible_hybrid(reverse, reverse, example)
+        self.assertIsNone(rejected)
+        self.assertFalse(bad_report["compatible"])
 
     def test_jsonl_telemetry_is_parseable(self):
         telemetry = JSONLTelemetry()
