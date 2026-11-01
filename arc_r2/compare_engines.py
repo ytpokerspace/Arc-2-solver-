@@ -1,4 +1,4 @@
-"""Leave-one-out comparison of the baseline and object ARC engines.
+"""Leave-one-out comparison of baseline, object, and QBS ARC engines.
 
 Only the task's supplied training pairs are used. Each fold holds one training
 pair out, fits on the remaining pairs, and scores the held-out pair. The task's
@@ -165,6 +165,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
             "held_out_pairs": task_folds,
             "baseline_exact": task_exact["baseline"],
             "object_exact": task_exact["object"],
+            "qbs_exact": task_exact["qbs"],
         })
 
     summary = {}
@@ -209,7 +210,7 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare ARC-R2 baseline and object engines with leave-one-out CV"
+        description="Compare ARC-R2 baseline, object, and QBS engines with leave-one-out CV"
     )
     parser.add_argument("--dataset", required=True, type=Path, help="local ARC JSON file")
     parser.add_argument("--limit", type=int, default=20)
