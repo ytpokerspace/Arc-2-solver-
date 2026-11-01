@@ -19,12 +19,23 @@ from .search import SearchLimits
 from .solver import Example, HybridSolver
 
 
-def load_tasks(path: Path) -> list[dict[str, Any]]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(raw, dict):
-        raw = [dict(value, task_id=key) for key, value in sorted(raw.items())]
-    if not isinstance(raw, list):
-        raise ValueError("dataset must be a task list or task-ID-to-task mapping")
+def load_tasks(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
+    if path.is_dir():
+        files = sorted(path.glob("*.json"))
+        if limit is not None:
+            files = files[:limit]
+        raw = []
+        for file_path in files:
+            task = json.loads(file_path.read_text(encoding="utf-8"))
+            if not isinstance(task, dict):
+                raise ValueError(f"{file_path.name} must contain a task object")
+            raw.append(dict(task, task_id=file_path.stem))
+    else:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            raw = [dict(value, task_id=key) for key, value in sorted(raw.items())]
+        if not isinstance(raw, list):
+            raise ValueError("dataset must be a task list, task-ID mapping, or directory of task JSON files")
     for index, task in enumerate(raw):
         if not isinstance(task, dict) or not isinstance(task.get("train"), list):
             raise ValueError(f"task {index} must contain a train list")
@@ -84,7 +95,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
 
 def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                     candidate_cap: int = 1200, mcts_iterations: int = 100) -> dict[str, Any]:
-    tasks = load_tasks(dataset)[:limit]
+    tasks = load_tasks(dataset, limit)
     eligible = [
         (task.get("task_id", str(index)), task)
         for index, task in enumerate(tasks)
@@ -184,8 +195,8 @@ def main(argv=None) -> int:
     parser.add_argument("--mcts-iterations", type=int, default=100)
     parser.add_argument("--output", type=Path, default=Path("arc_r2_engine_comparison.json"))
     args = parser.parse_args(argv)
-    if not args.dataset.is_file():
-        parser.error("dataset file does not exist")
+    if not args.dataset.exists() or not (args.dataset.is_file() or args.dataset.is_dir()):
+        parser.error("dataset file or directory does not exist")
     if not 1 <= args.limit <= 500:
         parser.error("limit must be in 1..500")
     if not 1 <= args.max_depth <= 4:
