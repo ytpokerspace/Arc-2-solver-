@@ -91,6 +91,7 @@ class HybridSolver:
             combined[()] = (scorer(Program()), Program())
 
         hian_report = None
+        hian_extra_evaluations = 0
         if self.use_hian:
             from .hian import analyze_hypotheses
             from .emoji_alchemy import generate_alchemy_candidates
@@ -102,13 +103,16 @@ class HybridSolver:
                 (candidate for _, candidate in combined.values()), max_depth=2
             )
             for candidate in expanded:
-                combined.setdefault(candidate.canonical(), (scorer(candidate), candidate))
+                if candidate.canonical() not in combined:
+                    combined[candidate.canonical()] = (0.0, candidate)
+                    hian_extra_evaluations += 1
             hian_report = analyze_hypotheses(
                 (candidate for _, candidate in combined.values()),
                 evidence_examples,
             )
             selected = tuple(hian_report["selected_hypothesis"]["program"])
-            score, program = combined[selected]
+            _, program = combined[selected]
+            score = scorer(program)
         else:
             score, program = max(
                 combined.values(),
@@ -117,5 +121,5 @@ class HybridSolver:
 
         exact = sum(program.apply(ex.input) == ex.output for ex in examples)
         return SolveResult(program, score, exact, len(examples),
-                           beam_stats.evaluated + mcts_stats.evaluated,
+                           beam_stats.evaluated + mcts_stats.evaluated + hian_extra_evaluations,
                            len(beam), len(mcts), hian_report)
