@@ -53,7 +53,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
     started = time.perf_counter()
     candidates = 0
     try:
-        if engine == "baseline":
+        if engine in {"baseline", "qbs"}:
             examples = tuple(
                 Example(as_grid(pair["input"]), as_grid(pair["output"]))
                 for pair in training_pairs
@@ -63,10 +63,17 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
                 candidate_cap=candidate_cap,
                 mcts_iterations=mcts_iterations,
             )
-            result = HybridSolver(limits, strategy="hybrid").solve(examples)
+            strategy = "qbs" if engine == "qbs" else "hybrid"
+            result = HybridSolver(limits, strategy=strategy).solve(examples)
             candidates = result.candidates_evaluated
             prediction = result.program.apply(as_grid(held_out["input"]))
+            qbs_metadata = {
+                "rounds": result.qbs_rounds,
+                "probability_estimate": result.qbs_probability_estimate,
+                "feasibility": result.qbs_feasibility,
+            } if engine == "qbs" else {}
         else:
+            qbs_metadata = {}
             examples = tuple(
                 ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
                 for pair in training_pairs
@@ -84,6 +91,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": None,
+            "qbs": qbs_metadata,
         }
     except Exception as exc:
         return {
@@ -91,6 +99,7 @@ def _predict(engine: str, training_pairs: tuple[dict, ...], held_out: dict,
             "candidates": candidates,
             "runtime_seconds": time.perf_counter() - started,
             "error": f"{type(exc).__name__}: {exc}",
+            "qbs": {},
         }
 
 
@@ -112,13 +121,13 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
 
     totals = {
         engine: {"folds": 0, "exact": 0, "candidates": 0, "runtime_seconds": 0.0, "failures": 0}
-        for engine in ("baseline", "object")
+        for engine in ("baseline", "object", "qbs")
     }
     task_rows = []
     fold_rows = []
 
     for task_id, task in eligible:
-        task_exact = {"baseline": 0, "object": 0}
+        task_exact = {"baseline": 0, "object": 0, "qbs": 0}
         task_folds = len(task["train"])
         for held_index, held_out in enumerate(task["train"]):
             training_pairs = tuple(
@@ -131,15 +140,18 @@ def compare_engines(dataset: Path, limit: int = 20, max_depth: int = 2,
                 "engines": {},
                 "diagnostics": {},
             }
-            for engine in ("baseline", "object"):
+            for engine in ("baseline", "object", "qbs"):
                 result = _predict(
                     engine, training_pairs, held_out,
                     max_depth, candidate_cap, mcts_iterations,
                 )
                 fold["engines"][engine] = result
-                fold["diagnostics"][engine] = diagnose_candidates(
-                    engine, training_pairs, held_out,
-                    max_depth=max_depth, candidate_cap=candidate_cap,
+                fold["diagnostics"][engine] = (
+                    {"method": "iterative_hybrid_search", **result["qbs"]}
+                    if engine == "qbs" else diagnose_candidates(
+                        engine, training_pairs, held_out,
+                        max_depth=max_depth, candidate_cap=candidate_cap,
+                    )
                 )
                 totals[engine]["folds"] += 1
                 totals[engine]["exact"] += int(result["exact"])
