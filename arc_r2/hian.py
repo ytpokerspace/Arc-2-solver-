@@ -12,6 +12,8 @@ from typing import Any, Iterable
 
 from .dsl import Program
 from .grid import Grid
+from .emoji_alchemy import apply_emoji_program, generate_alchemy_candidates, semantic_similarity
+from .emoji_codec import decode_grid
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class Evidence:
     source_id: str
     exact_match: bool
     cell_accuracy: float
+    semantic_accuracy: float
     predicted_shape: tuple[int, int] | None
     expected_shape: tuple[int, int]
 
@@ -30,6 +33,7 @@ class Hypothesis:
     exact_matches: int
     total_examples: int
     cell_accuracy: float
+    semantic_accuracy: float
     confidence_estimate: float
     supporting_sources: tuple[str, ...]
     contradicting_sources: tuple[str, ...]
@@ -67,18 +71,22 @@ def evaluate_hypothesis(
     for source_id, input_grid, expected in examples:
         predicted: Grid | None
         try:
-            predicted = program.apply(input_grid)
+            symbolic_prediction = apply_emoji_program(input_grid, program)
+            predicted = decode_grid(symbolic_prediction)
             exact = predicted == expected
             accuracy = _cell_accuracy(predicted, expected)
+            semantic = semantic_similarity(predicted, expected)
             predicted_shape = _shape(predicted)
         except Exception:
             exact = False
             accuracy = 0.0
+            semantic = 0.0
             predicted_shape = None
         evidence.append(Evidence(
             source_id=str(source_id),
             exact_match=exact,
             cell_accuracy=accuracy,
+            semantic_accuracy=semantic,
             predicted_shape=predicted_shape,
             expected_shape=_shape(expected),
         ))
@@ -87,6 +95,9 @@ def evaluate_hypothesis(
     exact_count = sum(item.exact_match for item in evidence)
     mean_cells = (
         sum(item.cell_accuracy for item in evidence) / total if total else 0.0
+    )
+    mean_semantic = (
+        sum(item.semantic_accuracy for item in evidence) / total if total else 0.0
     )
     # Beta(1, 1) smoothing: transparent training-fit estimate only.
     confidence = (exact_count + 1) / (total + 2) if total else 0.5
@@ -97,6 +108,7 @@ def evaluate_hypothesis(
         exact_matches=exact_count,
         total_examples=total,
         cell_accuracy=mean_cells,
+        semantic_accuracy=mean_semantic,
         confidence_estimate=confidence,
         supporting_sources=tuple(e.source_id for e in evidence if e.exact_match),
         contradicting_sources=tuple(e.source_id for e in evidence if not e.exact_match),
@@ -115,7 +127,7 @@ def analyze_hypotheses(
         raise ValueError("top_k must be at least 1")
     example_rows = tuple(examples)
     unique: dict[tuple[str, ...], Program] = {}
-    for candidate in candidates:
+    for candidate in generate_alchemy_candidates(candidates, max_depth=2):
         unique.setdefault(candidate.canonical(), candidate)
     if not unique:
         raise ValueError("at least one candidate hypothesis is required")
@@ -128,6 +140,7 @@ def analyze_hypotheses(
         (item[0] for item in evaluated),
         key=lambda h: (
             h.exact_matches,
+            h.semantic_accuracy,
             h.cell_accuracy,
             h.confidence_estimate,
             -h.complexity,
@@ -147,7 +160,9 @@ def analyze_hypotheses(
     }
     return {
         "system": "HIAN",
-        "version": "1.0",
+        "version": "1.1-emoji-alchemy",
+        "semantic_method": "lossless emoji-token execution with color, object-shape, spatial-relation, coarse-location, and dimension similarity",
+        "candidate_generation": "existing search candidates plus all DSL compositions up to depth two",
         "candidate_count": len(ranked),
         "training_example_count": len(example_rows),
         "confidence_semantics": (
