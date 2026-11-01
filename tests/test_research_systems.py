@@ -61,7 +61,7 @@ class ProvenanceAndBudgetTests(unittest.TestCase):
 
     def test_budget_stops_at_caps(self):
         budget = SearchBudget(max_expansions=1, max_executions=1, max_program_depth=2,
-                              max_seconds=10, max_hybrids=1)
+                              max_seconds=10, max_hybrids=1, max_memory_bytes=2048)
         self.assertTrue(budget.consume_expansion())
         self.assertFalse(budget.consume_expansion())
         self.assertEqual(budget.stopped_reason, "expansion_budget")
@@ -104,7 +104,7 @@ class LearningAndTelemetryTests(unittest.TestCase):
         library = AbstractionLibrary(min_validation_tasks=3, min_exact_rate=0.8)
         program = Program((Instruction("REVERSE.HORIZONTAL"),))
         self.assertFalse(library.propose(program, [("task-a", True), ("task-b", True)]))
-        self.assertTrue(library.propose(program, [True, True, True, True]))
+        self.assertTrue(library.propose(program, [("task-a", True), ("task-b", True), ("task-c", True), ("task-d", True)]))
         with self.assertRaises(ValueError):
             library.propose(program, [("task-a", True), ("task-a", True), ("task-b", True)])
         item_id = library.export()[0]["abstraction_id"]
