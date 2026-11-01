@@ -22,6 +22,7 @@ class SolveResult:
     candidates_evaluated: int
     beam_candidates: int
     mcts_candidates: int
+    qbs_rounds: int = 0
 
 def score_program(program: Program, examples: tuple[Example, ...], use_object_signal: bool = True) -> float:
     """Score only executable candidates; invalid programs receive zero."""
@@ -97,8 +98,15 @@ class HybridSolver:
         combined = {p.canonical(): (s, p) for s, p in beam + mcts}
         if not combined:
             combined[()] = (scorer(Program()), Program())
-        score, program = max(combined.values(), key=lambda item: (item[0], -item[1].complexity))
+        score, program = max(
+            combined.values(),
+            key=lambda item: (
+                sum(item[1].apply(ex.input) == ex.output for ex in examples),
+                item[0],
+                -item[1].complexity,
+            ),
+        )
         exact = sum(program.apply(ex.input) == ex.output for ex in examples)
         return SolveResult(program, score, exact, len(examples),
                            beam_stats.evaluated + mcts_stats.evaluated,
-                           len(beam), len(mcts))
+                           len(beam), len(mcts), beam_stats.qbs_rounds)
