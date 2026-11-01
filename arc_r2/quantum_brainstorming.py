@@ -47,7 +47,7 @@ def quantum_brainstorm_search(
     stats: SearchStats | None = None,
     *,
     rounds: int = 10,
-    elite_size: int = 12,
+    elite_size: int = 4,
 ) -> list[tuple[float, Program]]:
     """Run bounded hypothesis generation, hybridization, and iterative selection.
 
