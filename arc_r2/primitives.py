@@ -256,7 +256,7 @@ def recolor_largest_by_small_shape(
     shape_to_color: tuple[tuple[tuple[tuple[int, int], ...], int], ...],
 ) -> Grid:
     """Recolor the largest object using a learned mapping from the next object's shape."""
-    objects = find_objects(grid)
+    objects = find_objects(grid, connectivity=8)
     if len(objects) < 2:
         raise ValueError("at least two foreground objects are required")
     ordered = sorted(objects, key=lambda obj: (-obj.size, obj.bbox, obj.color))
@@ -479,7 +479,7 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
         target = as_grid(target_value)
         if dimensions(source) != dimensions(target):
             continue
-        objects = find_objects(source)
+        objects = find_objects(source, connectivity=8)
         if len(objects) < 2:
             continue
         ordered = sorted(objects, key=lambda obj: (-obj.size, obj.bbox, obj.color))
