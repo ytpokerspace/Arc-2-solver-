@@ -6,7 +6,7 @@ from pathlib import Path
 from arc_r2.primitives import (
     Program, Primitive, apply_primitive, as_grid, background_color,
     find_objects, fit_program, flip_horizontal, flip_vertical,
-    gravity, mirror_complete, rotate, transpose,
+    alternate_tile, gravity, mirror_complete, rotate, transpose,
 )
 from arc_r2.primitive_benchmark import run_benchmark
 
@@ -26,6 +26,21 @@ class PrimitiveLibraryTests(unittest.TestCase):
         self.assertEqual(len(find_objects(grid, 8)), 1)
         obj = find_objects(as_grid([[0, 0, 0], [0, 3, 3], [0, 3, 0]]))[0]
         self.assertEqual((obj.color, obj.size, obj.bbox), (3, 3, (1, 1, 2, 2)))
+
+    def test_alternating_tile_repeats_with_row_reflection(self):
+        source = as_grid([[7, 9], [4, 3]])
+        expected = as_grid([
+            [7, 9, 7, 9, 7, 9],
+            [4, 3, 4, 3, 4, 3],
+            [9, 7, 9, 7, 9, 7],
+            [3, 4, 3, 4, 3, 4],
+            [7, 9, 7, 9, 7, 9],
+            [4, 3, 4, 3, 4, 3],
+        ])
+        self.assertEqual(alternate_tile(source, 3, 3, "row_flip_h"), expected)
+        fit = fit_program(((source, expected),), candidate_cap=5000, max_depth=1)
+        self.assertTrue(fit.exact_fit)
+        self.assertEqual(fit.program.apply(source), expected)
 
     def test_gravity_preserves_lane_order(self):
         grid = as_grid([[0, 2], [3, 0], [0, 4]])
