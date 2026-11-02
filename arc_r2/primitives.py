@@ -253,7 +253,8 @@ def fill_object_boxes(grid: Grid) -> Grid:
     return tuple(tuple(row) for row in out)
 
 
-@lru_cache(maxsize=100000)\ndef apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
+@lru_cache(maxsize=100000)
+def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     name, args = operation.name, operation.args
     if name == "ROTATE": return rotate(grid, args[0])
     if name == "FLIP_H": return flip_horizontal(grid)
