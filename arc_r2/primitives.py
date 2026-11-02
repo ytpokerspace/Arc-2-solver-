@@ -245,6 +245,32 @@ def keep_largest_recolor(grid: Grid, target_color: int) -> Grid:
     return tuple(tuple(row) for row in output)
 
 
+def object_shape_signature(obj: Object) -> tuple[tuple[int, int], ...]:
+    top = min(r for r, _ in obj.cells)
+    left = min(c for _, c in obj.cells)
+    return tuple(sorted((r - top, c - left) for r, c in obj.cells))
+
+
+def recolor_largest_by_small_shape(
+    grid: Grid,
+    shape_to_color: tuple[tuple[tuple[tuple[int, int], ...], int], ...],
+) -> Grid:
+    """Recolor the largest object using a learned mapping from the next object's shape."""
+    objects = find_objects(grid)
+    if len(objects) < 2:
+        raise ValueError("at least two foreground objects are required")
+    ordered = sorted(objects, key=lambda obj: (-obj.size, obj.bbox, obj.color))
+    signature = object_shape_signature(ordered[1])
+    target_color = dict(shape_to_color).get(signature)
+    if target_color is None:
+        raise ValueError("no learned color mapping for the second-largest object shape")
+    bg = background_color(grid)
+    output = [[bg] * len(grid[0]) for _ in range(len(grid))]
+    for r, c in ordered[0].cells:
+        output[r][c] = target_color
+    return tuple(tuple(row) for row in output)
+
+
 def recolor_largest_by_small_size(grid: Grid, size_to_color: tuple[tuple[int, int], ...]) -> Grid:
     """Recolor the largest object based on the size of the next-largest object."""
     objects = find_objects(grid)
@@ -390,6 +416,7 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "STAMP_BY_MASK": return stamp_by_mask(grid)
     if name == "KEEP_LARGEST_RECOLOR": return keep_largest_recolor(grid, args[0])
     if name == "RECOLOR_LARGEST_BY_SIZE": return recolor_largest_by_small_size(grid, args[0])
+    if name == "RECOLOR_LARGEST_BY_SMALL_SHAPE": return recolor_largest_by_small_shape(grid, args[0])
     if name == "FILL_HOLES": return fill_holes(grid, args[0])
     if name == "APPEND_PREFIX": return append_prefix(grid, *args)
     if name == "GRAVITY": return gravity(grid, args[0])
@@ -445,6 +472,31 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
         if a != b:
             ops.add(Primitive("RECOLOR", (a, b)))
             ops.add(Primitive("SWAP_COLORS", (a, b)))
+    # Learn a small-object-shape -> large-object-color rule from paired examples.
+    learned_shape_colors = {}
+    shape_mapping_conflict = False
+    for source, target_value in zip(grids, training_outputs):
+        target = as_grid(target_value)
+        if dimensions(source) != dimensions(target):
+            continue
+        objects = find_objects(source)
+        if len(objects) < 2:
+            continue
+        ordered = sorted(objects, key=lambda obj: (-obj.size, obj.bbox, obj.color))
+        largest, second = ordered[0], ordered[1]
+        target_color_counts = {}
+        for r, col in largest.cells:
+            color = target[r][col]
+            target_color_counts[color] = target_color_counts.get(color, 0) + 1
+        if not target_color_counts:
+            continue
+        target_color = min(target_color_counts, key=lambda color: (-target_color_counts[color], color))
+        signature = object_shape_signature(second)
+        if signature in learned_shape_colors and learned_shape_colors[signature] != target_color:
+            shape_mapping_conflict = True
+        learned_shape_colors[signature] = target_color
+    if learned_shape_colors and not shape_mapping_conflict:
+        ops.add(Primitive("RECOLOR_LARGEST_BY_SMALL_SHAPE", (tuple(sorted(learned_shape_colors.items())),)))
     # Learn a small-object-size -> large-object-color rule from paired examples.
     learned_size_colors = {}
     mapping_conflict = False
