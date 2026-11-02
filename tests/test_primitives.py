@@ -7,7 +7,7 @@ from arc_r2.primitives import (
     Program, Primitive, apply_primitive, as_grid, background_color,
     find_objects, fit_program, flip_horizontal, flip_vertical,
     alternate_tile, append_prefix, fill_holes, gravity, keep_largest_recolor,
-    mirror_complete, rotate, stamp_by_mask, transpose,
+    mirror_complete, recolor_largest_by_small_size, rotate, stamp_by_mask, transpose,
 )
 from arc_r2.primitive_benchmark import run_benchmark
 
@@ -52,6 +52,21 @@ class PrimitiveLibraryTests(unittest.TestCase):
             [0, 0, 0, 1],
         ])
         self.assertEqual(stamp_by_mask(source), expected)
+
+    def test_zero_is_background_even_when_foreground_is_more_common(self):
+        dense = as_grid([[6, 6, 0], [6, 0, 0], [0, 6, 6]])
+        self.assertEqual(background_color(dense), 0)
+        stamped = stamp_by_mask(dense)
+        self.assertEqual((len(stamped), len(stamped[0])), (9, 9))
+
+    def test_largest_object_color_can_depend_on_small_object_size(self):
+        grid = as_grid([
+            [0, 1, 1, 0, 0],
+            [0, 1, 1, 0, 2],
+            [0, 0, 0, 0, 0],
+        ])
+        result = recolor_largest_by_small_size(grid, ((1, 4),))
+        self.assertEqual(result, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
 
     def test_fill_holes_and_keep_largest_object(self):
         ring = as_grid([
