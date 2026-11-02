@@ -213,6 +213,76 @@ def alternate_tile(grid: Grid, rows: int, cols: int, mode: str) -> Grid:
     return tuple(tuple(row) for row in output)
 
 
+def stamp_by_mask(grid: Grid) -> Grid:
+    """Expand an n-by-m grid into n-by-m tiles of itself, gated by its own cells."""
+    h, w = dimensions(grid)
+    bg = background_color(grid)
+    output = [[bg] * (w * w) for _ in range(h * h)]
+    for tile_r in range(h):
+        for tile_c in range(w):
+            if grid[tile_r][tile_c] == bg:
+                continue
+            for r in range(h):
+                for col in range(w):
+                    output[tile_r * h + r][tile_c * w + col] = grid[r][col]
+    return tuple(tuple(row) for row in output)
+
+
+def keep_largest_recolor(grid: Grid, target_color: int) -> Grid:
+    """Keep the largest foreground component, recolor it, and clear other components."""
+    objects = find_objects(grid)
+    if not objects:
+        return grid
+    selected = min(objects, key=lambda obj: (-obj.size, obj.bbox, obj.color))
+    bg = background_color(grid)
+    output = [[bg] * len(grid[0]) for _ in range(len(grid))]
+    for r, c in selected.cells:
+        output[r][c] = target_color
+    return tuple(tuple(row) for row in output)
+
+
+def fill_holes(grid: Grid, target_color: int) -> Grid:
+    """Fill background components that cannot reach the grid boundary."""
+    h, w = dimensions(grid)
+    bg = background_color(grid)
+    exterior = set()
+    queue = deque()
+    for r in range(h):
+        for c in (0, w - 1):
+            if grid[r][c] == bg and (r, c) not in exterior:
+                exterior.add((r, c)); queue.append((r, c))
+    for c in range(w):
+        for r in (0, h - 1):
+            if grid[r][c] == bg and (r, c) not in exterior:
+                exterior.add((r, c)); queue.append((r, c))
+    while queue:
+        r, c = queue.popleft()
+        for nr, nc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):
+            if 0 <= nr < h and 0 <= nc < w and grid[nr][nc] == bg and (nr, nc) not in exterior:
+                exterior.add((nr, nc)); queue.append((nr, nc))
+    output = [list(row) for row in grid]
+    for r in range(h):
+        for c in range(w):
+            if grid[r][c] == bg and (r, c) not in exterior:
+                output[r][c] = target_color
+    return tuple(tuple(row) for row in output)
+
+
+def append_prefix(grid: Grid, axis: str, count: int) -> Grid:
+    """Extend a grid by appending its first count rows or columns."""
+    if count < 1:
+        raise ValueError("prefix count must be positive")
+    if axis == "rows":
+        if count > len(grid):
+            raise ValueError("row prefix exceeds grid height")
+        return tuple(grid) + tuple(grid[:count])
+    if axis == "columns":
+        if count > len(grid[0]):
+            raise ValueError("column prefix exceeds grid width")
+        return tuple(tuple(row) + tuple(row[:count]) for row in grid)
+    raise ValueError("axis must be rows or columns")
+
+
 def gravity(grid: Grid, direction: str) -> Grid:
     """Compact non-background cells toward one edge, preserving order per lane."""
     if direction not in {"up", "down", "left", "right"}:
@@ -297,6 +367,10 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "SCALE": return scale(grid, args[0])
     if name == "TILE": return tile(grid, *args)
     if name == "ALTERNATE_TILE": return alternate_tile(grid, *args)
+    if name == "STAMP_BY_MASK": return stamp_by_mask(grid)
+    if name == "KEEP_LARGEST_RECOLOR": return keep_largest_recolor(grid, args[0])
+    if name == "FILL_HOLES": return fill_holes(grid, args[0])
+    if name == "APPEND_PREFIX": return append_prefix(grid, *args)
     if name == "GRAVITY": return gravity(grid, args[0])
     if name == "FILL_ROWS": return complete_lines(grid, "rows", args[0])
     if name == "FILL_COLUMNS": return complete_lines(grid, "columns", args[0])
@@ -345,20 +419,34 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
         Primitive("ROTATE", (turn,)) for turn in (1, 2, 3)
     } | {Primitive(name) for name in ("FLIP_H", "FLIP_V", "TRANSPOSE",
         "ANTI_DIAGONAL", "INVERT_POLARITY", "CROP_FOREGROUND",
-        "MIRROR_H", "MIRROR_V", "FILL_BOXES")}
+        "MIRROR_H", "MIRROR_V", "FILL_BOXES", "STAMP_BY_MASK")}
     for a, b in product(palette, repeat=2):
         if a != b:
             ops.add(Primitive("RECOLOR", (a, b)))
             ops.add(Primitive("SWAP_COLORS", (a, b)))
+    output_palette = sorted(set().union(*(set(color_counts(as_grid(g))) for g in training_outputs))) if training_outputs else palette
     for color in palette:
         ops.add(Primitive("CROP_COLOR", (color,)))
         ops.add(Primitive("FILL_ROWS", (color,)))
         ops.add(Primitive("FILL_COLUMNS", (color,)))
+    for color in output_palette:
+        ops.add(Primitive("FILL_HOLES", (color,)))
+        ops.add(Primitive("KEEP_LARGEST_RECOLOR", (color,)))
     for factor in (2, 3):
         ops.add(Primitive("SCALE", (factor,)))
     for rows, cols in ((1, 2), (2, 1), (2, 2), (3, 1), (1, 3)):
         if max_h * rows <= 30 and max_w * cols <= 30:
             ops.add(Primitive("TILE", (rows, cols)))
+    # Infer output-shape-specific operations from fit input/output dimensions.
+    for source, target in zip(grids, training_outputs):
+        source_h, source_w = dimensions(source)
+        target_h, target_w = dimensions(as_grid(target))
+        if target_h == source_h * source_h and target_w == source_w * source_w:
+            ops.add(Primitive("STAMP_BY_MASK"))
+        if target_h > source_h and target_w == source_w:
+            ops.add(Primitive("APPEND_PREFIX", ("rows", target_h - source_h)))
+        if target_w > source_w and target_h == source_h:
+            ops.add(Primitive("APPEND_PREFIX", ("columns", target_w - source_w)))
     # Infer exact repetition ratios from training input/output dimensions.
     for source, target in zip(grids, training_outputs):
         source_h, source_w = dimensions(source)
