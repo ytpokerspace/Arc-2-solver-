@@ -25,6 +25,9 @@ class SearchNode:
     predictions: tuple[Grid, ...]
     solved: frozenset[int]
     score: float
+    probability_estimate: float
+    feasibility: float
+    training_pair_success_rate: float
     parent: "SearchNode | None" = None
     children: list["SearchNode"] = field(default_factory=list)
     visits: int = 0
@@ -101,9 +104,16 @@ def _evaluate(
         progress = sum(similarities) / len(similarities)
     else:
         progress = 1.0
-    # Solved-pair coverage dominates; intermediate grid similarity guides search.
-    score = (len(solved) / len(pairs)) * 0.75 + progress * 0.25
-    return SearchNode(operations, tuple(predictions), frozenset(solved), score)
+    # These are transparent search heuristics, not calibrated generalization probabilities.
+    probability_estimate = max(0.0, min(1.0, progress))
+    feasibility = 1.0  # Every operation in this node executed successfully.
+    training_pair_success_rate = len(solved) / len(pairs)
+    score = (0.40 * probability_estimate + 0.35 * feasibility
+             + 0.25 * training_pair_success_rate)
+    return SearchNode(
+        operations, tuple(predictions), frozenset(solved), score,
+        probability_estimate, feasibility, training_pair_success_rate,
+    )
 
 
 def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
@@ -206,10 +216,22 @@ def search(
         created = _expand(leaf, pairs, branch_width)
         nodes_created += created
         if leaf is root:
-            first_hypotheses = [str(child.operations[0]) for child in leaf.children[:10]]
+            first_hypotheses = [
+                (f"{child.operations[0]} | priority={child.score:.3f} "
+                 f"p_est={child.probability_estimate:.3f} "
+                 f"feasible={child.feasibility:.1f} "
+                 f"train_exact_rate={child.training_pair_success_rate:.3f}")
+                for child in leaf.children[:10]
+            ]
         else:
             for child in leaf.children:
-                label = " -> ".join(str(op) for op in child.operations)
+                label = (
+                    f"{' -> '.join(str(op) for op in child.operations)} "
+                    f"| priority={child.score:.3f} "
+                    f"p_est={child.probability_estimate:.3f} "
+                    f"feasible={child.feasibility:.1f} "
+                    f"train_exact_rate={child.training_pair_success_rate:.3f}"
+                )
                 if label not in hybrid_candidates:
                     hybrid_candidates.append(label)
         if leaf.children:
