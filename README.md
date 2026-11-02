@@ -31,9 +31,9 @@ All active primitive implementations are in `arc_r2/primitives.py`.
 | Grid geometry | rotate 90/180/270, horizontal flip, vertical flip, transpose, anti-diagonal reflection |
 | Colors | recolor, swap two colors, invert dominant foreground/background |
 | Regions | crop to a color, crop non-background content |
-| Size/layout | nearest-neighbor scale, repeat/tile, alternating row/column/checkerboard tile transforms |
+| Size/layout | nearest-neighbor scale, repeat/tile, alternating row/column/checkerboard tile transforms, mask-based pattern stamping, append-prefix repetition |
 | Motion | gravity/compact up, down, left, right |
-| Completion | fill active rows, fill active columns, mirror-complete horizontally/vertically, fill object bounding boxes |
+| Completion | fill active rows, fill active columns, fill enclosed holes, mirror-complete horizontally/vertically, fill object bounding boxes, keep/recolor largest object |
 | Perception | color counts, dominant background, foreground palette, 4-connected and 8-connected object extraction, object size and bounding box |
 | Program model | immutable primitive instructions, deterministic program execution, canonical operation sequence |
 
