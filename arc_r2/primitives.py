@@ -460,7 +460,10 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
     if not training_inputs:
         raise ValueError("at least one training input is required")
     grids = tuple(as_grid(g) for g in training_inputs)
-    palette = sorted(set().union(*(set(color_counts(g)) for g in grids)))
+    palette_values = set().union(*(set(color_counts(g)) for g in grids))
+    for output in training_outputs:
+        palette_values.update(color_counts(as_grid(output)))
+    palette = sorted(palette_values)
     max_h = max(len(g) for g in grids)
     max_w = max(len(g[0]) for g in grids)
     ops = {
