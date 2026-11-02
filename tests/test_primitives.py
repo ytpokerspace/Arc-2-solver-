@@ -117,22 +117,25 @@ class PrimitiveLibraryTests(unittest.TestCase):
 
     def test_rotate_and_reflect_each_square_object(self):
         grid = as_grid([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 1, 0, 0],
-            [0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 0],
         ])
         self.assertEqual(transform_objects(grid, "rotate"), as_grid([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 1, 1, 1, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 0, 0, 0],
         ]))
         self.assertEqual(transform_objects(grid, "flip_h"), as_grid([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 1, 1, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 0],
         ]))
 
     def test_move_and_copy_pixels_without_changing_grid_size(self):
