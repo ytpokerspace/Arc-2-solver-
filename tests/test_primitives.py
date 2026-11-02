@@ -131,7 +131,7 @@ class PrimitiveLibraryTests(unittest.TestCase):
         self.assertEqual(transform_objects(grid, "flip_h"), as_grid([
             [0, 0, 0, 0],
             [0, 1, 1, 0],
-            [0, 1, 0, 0],
+            [0, 0, 1, 0],
             [0, 0, 0, 0],
         ]))
 
