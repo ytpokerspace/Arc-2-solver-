@@ -8,7 +8,7 @@ from arc_r2.primitives import (
     find_objects, fit_program, flip_horizontal, flip_vertical,
     alternate_tile, append_prefix, fill_holes, generate_primitives, gravity, keep_largest_recolor,
     mirror_complete, recolor_largest_by_small_shape, recolor_largest_by_small_size,
-    rotate, stamp_by_mask, transpose, translate_pixels,
+    rotate, stamp_by_mask, transpose, translate_pixels, transform_objects,
 )
 from arc_r2.primitive_benchmark import run_benchmark
 
@@ -113,6 +113,27 @@ class PrimitiveLibraryTests(unittest.TestCase):
         self.assertEqual(append_prefix(grid, "columns", 1),
                          ((1, 2, 1), (3, 4, 3), (5, 6, 5)))
 
+
+
+    def test_rotate_and_reflect_each_square_object(self):
+        grid = as_grid([
+            [0, 1, 0, 0],
+            [1, 0, 0, 2],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ])
+        self.assertEqual(transform_objects(grid, "rotate"), as_grid([
+            [1, 0, 0, 0],
+            [0, 1, 0, 2],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ]))
+        self.assertEqual(transform_objects(grid, "flip_h"), as_grid([
+            [0, 1, 0, 0],
+            [1, 0, 0, 2],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ]))
 
     def test_move_and_copy_pixels_without_changing_grid_size(self):
         grid = as_grid([
