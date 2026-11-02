@@ -397,6 +397,34 @@ def fill_object_boxes(grid: Grid) -> Grid:
     return tuple(tuple(row) for row in out)
 
 
+def translate_pixels(grid: Grid, dy: int, dx: int, color: int | None = None,
+                     copy: bool = False) -> Grid:
+    """Move or copy selected foreground pixels by a fixed row/column offset."""
+    if dy == 0 and dx == 0:
+        return grid
+    h, w = dimensions(grid)
+    bg = background_color(grid)
+    out = [list(row) for row in grid]
+    if not copy:
+        for r in range(h):
+            for c in range(w):
+                if grid[r][c] != bg and (color is None or grid[r][c] == color):
+                    out[r][c] = bg
+    for r in range(h):
+        for c in range(w):
+            value = grid[r][c]
+            if value == bg or (color is not None and value != color):
+                continue
+            nr, nc = r + dy, c + dx
+            if 0 <= nr < h and 0 <= nc < w:
+                if copy:
+                    if out[nr][nc] == bg:
+                        out[nr][nc] = value
+                else:
+                    out[nr][nc] = value
+    return tuple(tuple(row) for row in out)
+
+
 @lru_cache(maxsize=100000)
 def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     name, args = operation.name, operation.args
@@ -425,6 +453,10 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "MIRROR_H": return mirror_complete(grid, "horizontal")
     if name == "MIRROR_V": return mirror_complete(grid, "vertical")
     if name == "FILL_BOXES": return fill_object_boxes(grid)
+    if name == "MOVE_ALL": return translate_pixels(grid, *args)
+    if name == "COPY_ALL": return translate_pixels(grid, *args, copy=True)
+    if name == "MOVE_COLOR": return translate_pixels(grid, args[1], args[2], color=args[0])
+    if name == "COPY_COLOR": return translate_pixels(grid, args[1], args[2], color=args[0], copy=True)
     raise ValueError(f"unknown primitive: {name}")
 
 
@@ -559,6 +591,17 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
                 for mode in ("row_flip_h", "col_flip_v", "row_rotate_180",
                              "col_rotate_180", "checker_rotate_180"):
                     ops.add(Primitive("ALTERNATE_TILE", (repeat_rows, repeat_cols, mode)))
+    # Try small object translations and copies in every direction. Pixels
+    # that leave the grid are clipped; the grid dimensions stay unchanged.
+    for dy in range(-3, 4):
+        for dx in range(-3, 4):
+            if dy == 0 and dx == 0:
+                continue
+            ops.add(Primitive("MOVE_ALL", (dy, dx)))
+            ops.add(Primitive("COPY_ALL", (dy, dx)))
+            for color in palette:
+                ops.add(Primitive("MOVE_COLOR", (color, dy, dx)))
+                ops.add(Primitive("COPY_COLOR", (color, dy, dx)))
     for direction in ("up", "down", "left", "right"):
         ops.add(Primitive("GRAVITY", (direction,)))
     return tuple(sorted(ops))
