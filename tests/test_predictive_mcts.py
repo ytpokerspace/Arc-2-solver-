@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from arc_r2.predictive_mcts import search
-from arc_r2.primitives import as_grid, flip_horizontal
+from arc_r2.primitives import as_grid, flip_horizontal, recolor
 
 
 class PredictivePairMCTSTests(unittest.TestCase):
@@ -28,6 +28,16 @@ class PredictivePairMCTSTests(unittest.TestCase):
             self.assertTrue(second.memory_hit)
             self.assertEqual(second.iterations, 0)
             self.assertEqual(second.nodes_created, 0)
+
+    def test_hybrid_composes_two_steps_to_reach_target(self):
+        source = as_grid([[0, 1, 0], [2, 0, 0]])
+        target = flip_horizontal(recolor(source, 1, 3))
+        result = search(((source, target),), iterations=100,
+                        branch_width=10, max_depth=3)
+        self.assertTrue(result.exact_fit)
+        self.assertEqual(len(result.program.operations), 2)
+        self.assertEqual(result.program.apply(source), target)
+        self.assertTrue(result.hybrid_candidates)
 
     def test_every_training_pair_must_match(self):
         source_a = as_grid([[0, 1], [0, 0]])
