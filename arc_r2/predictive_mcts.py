@@ -12,10 +12,9 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any
 
 from .primitives import (
-    Grid, Primitive, Program, apply_primitive, as_grid, generate_primitives,
+    Grid, Primitive, Program, as_grid, generate_primitives,
 )
 from .single_stage_memory import SingleStageMemory
 
@@ -122,8 +121,8 @@ def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
         child = _evaluate(operations, pairs, node.solved)
         if child is None:
             continue
-        if child.solved == node.solved and child.score <= node.score:
-            continue
+        # Keep temporarily unhelpful steps: some valid transformations need
+        # an intermediate operation that only becomes useful after hybridization.
         child.parent = node
         ranked.append((child.score, str(operation), child))
     ranked.sort(key=lambda item: (-item[0], item[1]))
