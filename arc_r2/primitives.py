@@ -397,6 +397,30 @@ def fill_object_boxes(grid: Grid) -> Grid:
     return tuple(tuple(row) for row in out)
 
 
+def transform_objects(grid: Grid, mode: str) -> Grid:
+    """Turn or reflect square objects inside their own bounding boxes."""
+    if mode not in {"rotate", "flip_h", "flip_v"}:
+        raise ValueError("mode must be rotate, flip_h, or flip_v")
+    out = [list(row) for row in grid]
+    for obj in find_objects(grid):
+        r0, c0, r1, c1 = obj.bbox
+        height, width = obj.height, obj.width
+        if mode == "rotate" and height != width:
+            continue
+        for r, c in obj.cells:
+            out[r][c] = background_color(grid)
+        for r, c in obj.cells:
+            local_r, local_c = r - r0, c - c0
+            if mode == "rotate":
+                nr, nc = local_c, width - 1 - local_r
+            elif mode == "flip_h":
+                nr, nc = local_r, width - 1 - local_c
+            else:
+                nr, nc = height - 1 - local_r, local_c
+            out[r0 + nr][c0 + nc] = obj.color
+    return tuple(tuple(row) for row in out)
+
+
 def translate_pixels(grid: Grid, dy: int, dx: int, color: int | None = None,
                      copy: bool = False) -> Grid:
     """Move or copy selected foreground pixels by a fixed row/column offset."""
@@ -453,6 +477,9 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "MIRROR_H": return mirror_complete(grid, "horizontal")
     if name == "MIRROR_V": return mirror_complete(grid, "vertical")
     if name == "FILL_BOXES": return fill_object_boxes(grid)
+    if name == "ROTATE_OBJECTS": return transform_objects(grid, "rotate")
+    if name == "REFLECT_OBJECTS_H": return transform_objects(grid, "flip_h")
+    if name == "REFLECT_OBJECTS_V": return transform_objects(grid, "flip_v")
     if name == "MOVE_ALL": return translate_pixels(grid, *args)
     if name == "COPY_ALL": return translate_pixels(grid, *args, copy=True)
     if name == "MOVE_COLOR": return translate_pixels(grid, args[1], args[2], color=args[0])
@@ -502,7 +529,8 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
         Primitive("ROTATE", (turn,)) for turn in (1, 2, 3)
     } | {Primitive(name) for name in ("FLIP_H", "FLIP_V", "TRANSPOSE",
         "ANTI_DIAGONAL", "INVERT_POLARITY", "CROP_FOREGROUND",
-        "MIRROR_H", "MIRROR_V", "FILL_BOXES", "STAMP_BY_MASK")}
+        "MIRROR_H", "MIRROR_V", "FILL_BOXES", "STAMP_BY_MASK",
+        "ROTATE_OBJECTS", "REFLECT_OBJECTS_H", "REFLECT_OBJECTS_V")}
     for a, b in product(palette, repeat=2):
         if a != b:
             ops.add(Primitive("RECOLOR", (a, b)))
