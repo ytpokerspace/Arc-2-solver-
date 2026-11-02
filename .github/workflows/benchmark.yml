@@ -35,10 +35,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Restore single-stage rule memory
+        uses: actions/cache@v4
+        with:
+          path: .arc_r2_single_stage_memory.json
+          key: arc-r2-single-stage-memory-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            arc-r2-single-stage-memory-${{ github.ref_name }}-
+            arc-r2-single-stage-memory-
       - name: Run deterministic primitive benchmark (no MCTS, no beam search)
         env:
           TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
-        run: python -m arc_r2.primitive_benchmark --dataset arc-agi-2-data/data/training --limit "$TASK_LIMIT" --max-depth 2 --candidate-cap 1500 --output arc_r2_primitive_benchmark.json
+        run: python -m arc_r2.primitive_benchmark --dataset arc-agi-2-data/data/training --limit "$TASK_LIMIT" --max-depth 2 --candidate-cap 1500 --memory .arc_r2_single_stage_memory.json --output arc_r2_primitive_benchmark.json
       - name: Upload primitive benchmark report
         if: always()
         uses: actions/upload-artifact@v4
