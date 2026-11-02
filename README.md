@@ -33,7 +33,7 @@ All active primitive implementations are in `arc_r2/primitives.py`.
 | Regions | crop to a color, crop non-background content |
 | Size/layout | nearest-neighbor scale, repeat/tile, alternating row/column/checkerboard tile transforms, mask-based pattern stamping, append-prefix repetition |
 | Motion | gravity/compact up, down, left, right |
-| Completion | fill active rows, fill active columns, fill enclosed holes, mirror-complete horizontally/vertically, fill object bounding boxes, keep/recolor largest object |
+| Completion | fill active rows, fill active columns, fill enclosed holes, mirror-complete horizontally/vertically, fill object bounding boxes, keep/recolor largest object using a learned size-to-color rule |
 | Perception | color counts, dominant background, foreground palette, 4-connected and 8-connected object extraction, object size and bounding box |
 | Program model | immutable primitive instructions, deterministic program execution, canonical operation sequence |
 
