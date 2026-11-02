@@ -724,10 +724,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         fits += 1
         if best is None or (program.complexity, str(program)) < (best.complexity, str(best)):
             best = program
-        if memory is not None and cached_program is None and not memory_saved:
-            memory.save(fingerprint, tuple((op.name, op.args) for op in program.operations))
-            memory_saved = True
     if best is None and cached_program is not None:
         return FitResult(cached_program, evaluated, True, 1, memory_hit=True)
+    if best is not None and memory is not None and cached_program is None:
+        memory.save(fingerprint, tuple((op.name, op.args) for op in best.operations))
+        memory_saved = True
     return FitResult(best, evaluated, best is not None, fits,
                      memory_hit=cached_program is not None, memory_saved=memory_saved)
