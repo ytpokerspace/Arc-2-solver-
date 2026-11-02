@@ -185,6 +185,34 @@ def tile(grid: Grid, rows: int, cols: int) -> Grid:
                  for r in range(len(grid) * rows))
 
 
+def alternate_tile(grid: Grid, rows: int, cols: int, mode: str) -> Grid:
+    """Repeat a grid while changing each tile's orientation by tile position."""
+    if rows < 1 or cols < 1:
+        raise ValueError("tile counts must be positive")
+    allowed = {"row_flip_h", "col_flip_v", "row_rotate_180",
+               "col_rotate_180", "checker_rotate_180"}
+    if mode not in allowed:
+        raise ValueError(f"mode must be one of {sorted(allowed)}")
+    h, w = dimensions(grid)
+    output = [[0] * (w * cols) for _ in range(h * rows)]
+    for tile_r in range(rows):
+        for tile_c in range(cols):
+            if mode == "row_flip_h":
+                block = flip_horizontal(grid) if tile_r % 2 else grid
+            elif mode == "col_flip_v":
+                block = flip_vertical(grid) if tile_c % 2 else grid
+            elif mode == "row_rotate_180":
+                block = rotate(grid, 2) if tile_r % 2 else grid
+            elif mode == "col_rotate_180":
+                block = rotate(grid, 2) if tile_c % 2 else grid
+            else:
+                block = rotate(grid, 2) if (tile_r + tile_c) % 2 else grid
+            for r in range(h):
+                for c in range(w):
+                    output[tile_r * h + r][tile_c * w + c] = block[r][c]
+    return tuple(tuple(row) for row in output)
+
+
 def gravity(grid: Grid, direction: str) -> Grid:
     """Compact non-background cells toward one edge, preserving order per lane."""
     if direction not in {"up", "down", "left", "right"}:
@@ -268,6 +296,7 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "CROP_FOREGROUND": return crop_non_background(grid)
     if name == "SCALE": return scale(grid, args[0])
     if name == "TILE": return tile(grid, *args)
+    if name == "ALTERNATE_TILE": return alternate_tile(grid, *args)
     if name == "GRAVITY": return gravity(grid, args[0])
     if name == "FILL_ROWS": return complete_lines(grid, "rows", args[0])
     if name == "FILL_COLUMNS": return complete_lines(grid, "columns", args[0])
@@ -304,7 +333,7 @@ class Program:
         return "IDENTITY" if not self.operations else " -> ".join(map(str, self.operations))
 
 
-def generate_primitives(training_inputs: tuple[Grid, ...]) -> tuple[Primitive, ...]:
+def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tuple[Grid, ...] = ()) -> tuple[Primitive, ...]:
     """Build a finite vocabulary from colors and dimensions visible in fit inputs."""
     if not training_inputs:
         raise ValueError("at least one training input is required")
@@ -330,6 +359,17 @@ def generate_primitives(training_inputs: tuple[Grid, ...]) -> tuple[Primitive, .
     for rows, cols in ((1, 2), (2, 1), (2, 2), (3, 1), (1, 3)):
         if max_h * rows <= 30 and max_w * cols <= 30:
             ops.add(Primitive("TILE", (rows, cols)))
+    # Infer exact repetition ratios from training input/output dimensions.
+    for source, target in zip(grids, training_outputs):
+        source_h, source_w = dimensions(source)
+        target_h, target_w = dimensions(as_grid(target))
+        if target_h % source_h == 0 and target_w % source_w == 0:
+            repeat_rows, repeat_cols = target_h // source_h, target_w // source_w
+            if 1 <= repeat_rows <= 6 and 1 <= repeat_cols <= 6:
+                ops.add(Primitive("TILE", (repeat_rows, repeat_cols)))
+                for mode in ("row_flip_h", "col_flip_v", "row_rotate_180",
+                             "col_rotate_180", "checker_rotate_180"):
+                    ops.add(Primitive("ALTERNATE_TILE", (repeat_rows, repeat_cols, mode)))
     for direction in ("up", "down", "left", "right"):
         ops.add(Primitive("GRAVITY", (direction,)))
     return tuple(sorted(ops))
@@ -356,7 +396,7 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
     if not 0 <= max_depth <= 2:
         raise ValueError("max_depth must be 0..2")
     pairs = tuple((as_grid(a), as_grid(b)) for a, b in examples)
-    primitives = generate_primitives(tuple(a for a, _ in pairs))
+    primitives = generate_primitives(tuple(a for a, _ in pairs), tuple(b for _, b in pairs))
     def candidate_programs():
         yield Program()
         for operation in primitives:
