@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import product
 from collections import deque
-from typing import Iterable
+from functools import lru_cache
 
 Grid = tuple[tuple[int, ...], ...]
 
@@ -253,7 +253,7 @@ def fill_object_boxes(grid: Grid) -> Grid:
     return tuple(tuple(row) for row in out)
 
 
-def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
+@lru_cache(maxsize=100000)\ndef apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     name, args = operation.name, operation.args
     if name == "ROTATE": return rotate(grid, args[0])
     if name == "FLIP_H": return flip_horizontal(grid)
@@ -356,15 +356,20 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         raise ValueError("max_depth must be 0..2")
     pairs = tuple((as_grid(a), as_grid(b)) for a, b in examples)
     primitives = generate_primitives(tuple(a for a, _ in pairs))
-    candidates = [Program()]
-    candidates.extend(Program((op,)) for op in primitives)
-    if max_depth >= 2:
-        candidates.extend(Program((first, second)) for first in primitives for second in primitives)
+    def candidate_programs():
+        yield Program()
+        for operation in primitives:
+            yield Program((operation,))
+        if max_depth >= 2:
+            for first in primitives:
+                for second in primitives:
+                    yield Program((first, second))
+
     best: Program | None = None
     fits = 0
     evaluated = 0
     behavior_seen = set()
-    for program in candidates:
+    for program in candidate_programs():
         if evaluated >= candidate_cap:
             break
         outputs = []
