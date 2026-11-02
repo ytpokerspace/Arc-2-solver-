@@ -119,7 +119,7 @@ def _evaluate(
 
 
 def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
-            branch_width: int) -> int:
+            branch_width: int) -> tuple[int, int]:
     node.expanded = True
     unresolved = [i for i in range(len(pairs)) if i not in node.solved]
     if not unresolved:
