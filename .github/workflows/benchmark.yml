@@ -6,6 +6,11 @@ on:
       - "arc_r2/primitives.py"
       - "arc_r2/primitive_benchmark.py"
       - ".github/workflows/benchmark.yml"
+  pull_request:
+    paths:
+      - "arc_r2/primitives.py"
+      - "arc_r2/primitive_benchmark.py"
+      - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       task_limit:
