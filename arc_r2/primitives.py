@@ -593,8 +593,8 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
                     ops.add(Primitive("ALTERNATE_TILE", (repeat_rows, repeat_cols, mode)))
     # Try small object translations and copies in every direction. Pixels
     # that leave the grid are clipped; the grid dimensions stay unchanged.
-    for dy in range(-3, 4):
-        for dx in range(-3, 4):
+    for dy in range(-2, 3):
+        for dx in range(-2, 3):
             if dy == 0 and dx == 0:
                 continue
             ops.add(Primitive("MOVE_ALL", (dy, dx)))
