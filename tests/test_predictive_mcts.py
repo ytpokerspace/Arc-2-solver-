@@ -17,6 +17,9 @@ class PredictivePairMCTSTests(unittest.TestCase):
             self.assertTrue(first.exact_fit)
             self.assertEqual(first.solved_pairs, 1)
             self.assertEqual(len(first.program.operations), 1)
+            self.assertTrue(first.first_hypotheses)
+            self.assertIn("p_est=", first.first_hypotheses[0])
+            self.assertIn("train_exact_rate=", first.first_hypotheses[0])
             self.assertTrue(first.memory_saved)
 
             second = search(((source, target),), iterations=100,
