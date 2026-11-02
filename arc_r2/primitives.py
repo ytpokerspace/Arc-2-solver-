@@ -670,15 +670,16 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         json.dumps(fingerprint_payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     ).hexdigest()
     memory = SingleStageMemory(memory_path) if memory_path else None
+    cached_program = None
     if memory is not None:
         cached = memory.load(fingerprint)
         if cached is not None:
             try:
-                cached_program = Program(tuple(Primitive(name, args) for name, args in cached))
-                if all(cached_program.apply(source) == target for source, target in pairs):
-                    return FitResult(cached_program, 0, True, 1, memory_hit=True)
+                candidate = Program(tuple(Primitive(name, args) for name, args in cached))
+                if all(candidate.apply(source) == target for source, target in pairs):
+                    cached_program = candidate
             except (ValueError, IndexError, TypeError):
-                pass
+                cached_program = None
 
     primitives = generate_primitives(tuple(a for a, _ in pairs), tuple(b for _, b in pairs))
     def candidate_programs():
@@ -696,6 +697,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
     behavior_seen = set()
     memory_saved = False
     for program in candidate_programs():
+        # A previously confirmed stage-one rule is not rediscovered. Search
+        # every other candidate first; use the cached rule only as a fallback.
+        if cached_program is not None and str(program) == str(cached_program):
+            continue
         if evaluated >= candidate_cap:
             break
         outputs = []
@@ -719,7 +724,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         fits += 1
         if best is None or (program.complexity, str(program)) < (best.complexity, str(best)):
             best = program
-        if memory is not None and not memory_saved:
+        if memory is not None and cached_program is None and not memory_saved:
             memory.save(fingerprint, tuple((op.name, op.args) for op in program.operations))
             memory_saved = True
-    return FitResult(best, evaluated, best is not None, fits, memory_saved=memory_saved)
+    if best is None and cached_program is not None:
+        return FitResult(cached_program, evaluated, True, 1, memory_hit=True)
+    return FitResult(best, evaluated, best is not None, fits,
+                     memory_hit=cached_program is not None, memory_saved=memory_saved)
