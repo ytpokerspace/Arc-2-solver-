@@ -174,6 +174,24 @@ class PrimitiveLibraryTests(unittest.TestCase):
         program = Program((Primitive("FLIP_H"),))
         self.assertEqual(program.apply(as_grid([[1, 2]])), ((2, 1),))
 
+    def test_single_stage_memory_skips_known_rule_and_searches_alternatives(self):
+        source = as_grid([[0, 1, 0], [2, 0, 0]])
+        target = flip_horizontal(source)
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "single-stage.json"
+            first = fit_program(((source, target),), candidate_cap=5000,
+                                max_depth=1, memory_path=str(memory_path))
+            self.assertTrue(first.exact_fit)
+            self.assertTrue(first.memory_saved)
+            self.assertTrue(memory_path.exists())
+
+            second = fit_program(((source, target),), candidate_cap=5000,
+                                 max_depth=1, memory_path=str(memory_path))
+            self.assertTrue(second.exact_fit)
+            self.assertTrue(second.memory_hit)
+            self.assertGreater(second.candidates_evaluated, 0)
+            self.assertEqual(second.program.apply(source), target)
+
     def test_exact_fit_required_and_shortest_program(self):
         source = as_grid([[0, 1], [0, 0]])
         target = rotate(source, 1)

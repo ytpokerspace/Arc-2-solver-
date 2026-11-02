@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from itertools import product
 from collections import deque
 from functools import lru_cache
+import hashlib
+import json
+
+from .single_stage_memory import SingleStageMemory
 
 Grid = tuple[tuple[int, ...], ...]
 
@@ -641,13 +645,17 @@ class FitResult:
     candidates_evaluated: int
     exact_fit: bool
     fit_program_count: int
+    memory_hit: bool = False
+    memory_saved: bool = False
 
 
 def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 5000,
-                max_depth: int = 2) -> FitResult:
-    """Exhaustively test primitive chains; shortest exact training fit wins.
+                max_depth: int = 2, memory_path: str | None = None) -> FitResult:
+    """Find an exact fit, reusing a validated single-stage memory record when possible.
 
-    No partial-fit program is returned. Enumeration is deterministic and capped.
+    Memory is keyed to the exact ordered training-pair set. A hit is reapplied to
+    every pair before reuse. If it fails, normal deterministic search continues.
+    Newly discovered exact fits are saved immediately as stage-one records.
     """
     if not examples:
         raise ValueError("at least one training pair is required")
@@ -656,6 +664,23 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
     if not 0 <= max_depth <= 2:
         raise ValueError("max_depth must be 0..2")
     pairs = tuple((as_grid(a), as_grid(b)) for a, b in examples)
+    fingerprint_payload = [[[list(row) for row in source], [list(row) for row in target]]
+                           for source, target in pairs]
+    fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    memory = SingleStageMemory(memory_path) if memory_path else None
+    cached_program = None
+    if memory is not None:
+        cached = memory.load(fingerprint)
+        if cached is not None:
+            try:
+                candidate = Program(tuple(Primitive(name, args) for name, args in cached))
+                if all(candidate.apply(source) == target for source, target in pairs):
+                    cached_program = candidate
+            except (ValueError, IndexError, TypeError):
+                cached_program = None
+
     primitives = generate_primitives(tuple(a for a, _ in pairs), tuple(b for _, b in pairs))
     def candidate_programs():
         yield Program()
@@ -670,7 +695,12 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
     fits = 0
     evaluated = 0
     behavior_seen = set()
+    memory_saved = False
     for program in candidate_programs():
+        # A previously confirmed stage-one rule is not rediscovered. Search
+        # every other candidate first; use the cached rule only as a fallback.
+        if cached_program is not None and str(program) == str(cached_program):
+            continue
         if evaluated >= candidate_cap:
             break
         outputs = []
@@ -694,4 +724,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         fits += 1
         if best is None or (program.complexity, str(program)) < (best.complexity, str(best)):
             best = program
-    return FitResult(best, evaluated, best is not None, fits)
+    if best is None and cached_program is not None:
+        return FitResult(cached_program, evaluated, True, 1, memory_hit=True)
+    if best is not None and memory is not None and cached_program is None:
+        memory.save(fingerprint, tuple((op.name, op.args) for op in best.operations))
+        memory_saved = True
+    return FitResult(best, evaluated, best is not None, fits,
+                     memory_hit=cached_program is not None, memory_saved=memory_saved)
