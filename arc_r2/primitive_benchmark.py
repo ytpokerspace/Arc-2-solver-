@@ -35,6 +35,7 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
     started = time.perf_counter()
     for task_index, task in enumerate(tasks):
         task_id = str(task.get("task_id", task_index))
+        print(f"[TASK] {task_index + 1}/{len(tasks)} id={task_id}", flush=True)
         train = task.get("train")
         if not isinstance(train, list) or len(train) < 2:
             skipped.append(task_id)
@@ -43,6 +44,7 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
         for pair in train:
             checked.append((as_grid(pair["input"]), as_grid(pair["output"])))
         for held_index, (held_input, held_output) in enumerate(checked):
+            print(f"[FOLD] task={task_id} held_out={held_index + 1}/{len(checked)}", flush=True)
             fit_pairs = tuple(pair for i, pair in enumerate(checked) if i != held_index)
             result = fit_program(fit_pairs, candidate_cap=candidate_cap, max_depth=max_depth)
             prediction = None
