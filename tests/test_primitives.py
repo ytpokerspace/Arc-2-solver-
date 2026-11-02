@@ -6,7 +6,7 @@ from pathlib import Path
 from arc_r2.primitives import (
     Program, Primitive, apply_primitive, as_grid, background_color,
     find_objects, fit_program, flip_horizontal, flip_vertical,
-    alternate_tile, append_prefix, fill_holes, gravity, keep_largest_recolor,
+    alternate_tile, append_prefix, fill_holes, generate_primitives, gravity, keep_largest_recolor,
     mirror_complete, recolor_largest_by_small_shape, recolor_largest_by_small_size,
     rotate, stamp_by_mask, transpose,
 )
@@ -95,6 +95,16 @@ class PrimitiveLibraryTests(unittest.TestCase):
         ])
         kept = keep_largest_recolor(objects, 4)
         self.assertEqual(kept, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
+
+    def test_target_only_color_is_available_to_recolor(self):
+        source = as_grid([[0, 1], [1, 0]])
+        recolored = as_grid([[0, 2], [2, 0]])
+        target = append_prefix(recolored, "rows", 1)
+        primitives = generate_primitives((source,), (target,))
+        self.assertIn(Primitive("RECOLOR", (1, 2)), primitives)
+        result = fit_program(((source, target),), candidate_cap=5000, max_depth=2)
+        self.assertTrue(result.exact_fit)
+        self.assertEqual(result.program.apply(source), target)
 
     def test_append_prefix_rows_and_columns(self):
         grid = as_grid([[1, 2], [3, 4], [5, 6]])
