@@ -1,69 +1,59 @@
 # ARC-2 Solver (ARC-R2)
 
-A dependency-free, Python-first research solver for ARC-AGI-2-style grid tasks. The initial implementation is deliberately conservative: it provides explicit grid operators, a small typed transformation DSL, bounded Beam Search, a UCT-guided Monte Carlo Tree Search (MCTS), cross-example evaluation, and reproducible local tests.
+A transparent, primitive-first ARC research solver. The active benchmark path uses **explicit elementary transformations and deterministic exhaustive enumeration only**. It does not invoke Monte Carlo Tree Search (MCTS), beam search, neural networks, external APIs, or paid services.
 
-**Research status:** prototype / baseline implementation. No ARC-AGI-2 training-set score is claimed. Synthetic tests are not official benchmark results.
+## Current status
 
-## Requirements
-- Python 3.10+
-- Standard library only
-- No network access, credentials, API keys, or paid services required
+This is a research prototype, not a solved ARC-AGI-2 system. A successful unit test means the primitive or harness behaves as specified; it does not mean an ARC task was solved. Public benchmark results are reported as leave-one-training-pair-out cross-validation, not official hidden-test accuracy.
 
-## Run
-Use the single-file entry point:
-```bash
-python arc_solver.py --demo
-python arc_solver.py --dataset path/to/tasks.json --limit 20
+## Run the primitive solver
 
-# Try the parameterized object-centric search engine
-python arc_solver.py --engine object --dataset path/to/tasks.json --limit 20
-```
+Python 3.10+; standard library only.
 
-The package CLI is also available:
 ```bash
 python -m unittest discover -s tests -v
-python -m arc_r2.cli --demo
+python -m arc_r2.primitive_benchmark \
+  --dataset path/to/ARC-AGI-2/data/training \
+  --limit 20 \
+  --max-depth 2 \
+  --candidate-cap 5000 \
+  --output arc_r2_primitive_benchmark.json
 ```
 
-For a local ARC JSON file (either a task list or the standard task-ID-to-task mapping, each task containing `train` and `test` arrays):
-```bash
-python -m arc_r2.cli --dataset path/to/tasks.json --limit 20
-python -m arc_r2.benchmark --dataset path/to/tasks.json --limit 20
+The harness reads each task's training input/output pairs. It holds one training pair out, fits on the remaining pairs, and checks the held-out pair. It does not parse or use task test outputs.
 
-# Compare baseline and object engines using leave-one-training-pair-out validation
-python -m arc_r2.compare_engines --dataset path/to/tasks.json --limit 20 --max-depth 2
-```
-The runner reads only the supplied local file. It does not download datasets. Predictions for each supplied test input are written to the JSONL run log; hidden test answers are not needed or inferred.
+## Elementary primitive library
 
-## Architecture
-- `arc_solver.py`: direct Python-script entry point.
-- `grid.py`: immutable grid validation and helpers.
-- `objects.py` and `relations.py`: four-connected object extraction and spatial relation graph.
-- `object_ops.py`: deterministic geometry transforms and shape/size descriptors.
-- `object_dsl.py`: parameterized object instructions, bounded candidate generation, and collision/bounds checks.
-- `object_solver.py`: bounded beam search over object-centric programs.
-- `prte.py`: experimental dominant-background polarity reversal.
-- `transforms.py`: distinct spatial, color/polarity, and inverse operators.
-- `dsl.py`: typed operation/program representation.
-- `search.py`: bounded Beam Search and UCT-guided MCTS.
-- `solver.py`: shared candidate evaluation and selectable identity/Beam/MCTS/hybrid strategies.
-- `benchmark.py`: local baseline comparison and PRTE/object-signal ablations.
-- `compare_engines.py`: paired leave-one-training-pair-out comparison of baseline and object engines.
-- `cli.py`: visible progress, local dataset runner, and safety limits.
+All active primitive implementations are in `arc_r2/primitives.py`.
 
-## Safety and reproducibility
-Search depth, candidate count, MCTS iterations, and task count are bounded. The program performs no network operations and has no API integration. It never modifies input datasets. JSONL logs are written only to the selected output directory (default: current directory's `arc_r2_runs/`). Use Ctrl-C to stop. An interrupted run records its state where possible.
+| Family | Operations |
+|---|---|
+| Grid geometry | rotate 90/180/270, horizontal flip, vertical flip, transpose, anti-diagonal reflection |
+| Colors | recolor, swap two colors, invert dominant foreground/background |
+| Regions | crop to a color, crop non-background content |
+| Size/layout | nearest-neighbor scale, repeat/tile |
+| Motion | gravity/compact up, down, left, right |
+| Completion | fill active rows, fill active columns, mirror-complete horizontally/vertically, fill object bounding boxes |
+| Perception | color counts, dominant background, foreground palette, 4-connected and 8-connected object extraction, object size and bounding box |
+| Program model | immutable primitive instructions, deterministic program execution, canonical operation sequence |
 
-## Test gates
-1. Code integrity (syntax/imports)
-2. Unit tests
-3. Integration tests
-4. Synthetic training tasks
-5. User-supplied ARC training tasks
-6. Formal benchmarks after prior gates pass
-7. Release verification
+The vocabulary is parameterized from colors and dimensions visible in the fit inputs. Programs contain zero, one, or two operations. The harness tests candidates deterministically, removes duplicate behaviors, and selects the shortest exact fit. If no candidate reproduces every fit pair exactly, it abstains; it does not return a partial-fit guess.
 
-A task's training examples are used to select a program; test examples are predictions only and are never used for fitting. Reported accuracy must identify the dataset and split.
+## Harness and evidence
 
-## Limitations
-The baseline grid DSL is intentionally small. The experimental object DSL currently searches a bounded set of one- and two-step scale, rotate, reflect, move, and place programs. Object indices are based on deterministic connected-component ordering at each instruction step; this can be ambiguous when objects change order. Parameter generation is deliberately capped and does not cover every possible ARC transformation. Official dataset ingestion validation and evidence-based operator conclusions remain future work. The benchmark harnesses exist, but no ARC-AGI-2 dataset results are claimed. The `ARC-R2 public training comparison` GitHub Actions workflow runs a small, pinned public-training pilot and saves its JSON report as an artifact. It is a smoke-scale research measurement, not an official leaderboard result. `compare_engines.py` uses only the supplied training pairs: it holds one pair out, fits on the others, and evaluates the held-out pair. Tasks with fewer than two training pairs are skipped. This cross-validation diagnostic is not official test accuracy. MCTS currently explores bounded operator sequences and shares the same evaluator as Beam Search; it is not a claim of optimal search.
+- `arc_r2/primitive_benchmark.py`: dataset loader and leave-one-training-pair-out benchmark.
+- `tests/test_primitives.py`: primitive correctness, object extraction, exact-fit and abstention tests.
+- `.github/workflows/tests.yml`: compile and test gate.
+- `.github/workflows/benchmark.yml`: pinned public ARC-AGI-2 training benchmark and JSON artifact.
+
+The benchmark reports exact held-out training-pair accuracy, fit coverage, candidate counts, runtime, and per-fold predictions. A task with fewer than two training examples is skipped because it cannot support leave-one-out evaluation.
+
+## Explicit non-goals for this implementation
+
+- No MCTS.
+- No beam search in the active primitive benchmark.
+- No random exploration or hidden-test fitting.
+- No claims of complete ARC primitive coverage.
+- No claim that the system has solved ARC-AGI-2.
+
+The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
