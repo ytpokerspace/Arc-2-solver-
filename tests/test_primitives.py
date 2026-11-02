@@ -6,7 +6,8 @@ from pathlib import Path
 from arc_r2.primitives import (
     Program, Primitive, apply_primitive, as_grid, background_color,
     find_objects, fit_program, flip_horizontal, flip_vertical,
-    alternate_tile, gravity, mirror_complete, rotate, transpose,
+    alternate_tile, append_prefix, fill_holes, gravity, keep_largest_recolor,
+    mirror_complete, rotate, stamp_by_mask, transpose,
 )
 from arc_r2.primitive_benchmark import run_benchmark
 
@@ -41,6 +42,40 @@ class PrimitiveLibraryTests(unittest.TestCase):
         fit = fit_program(((source, expected),), candidate_cap=5000, max_depth=1)
         self.assertTrue(fit.exact_fit)
         self.assertEqual(fit.program.apply(source), expected)
+
+    def test_mask_stamp_expands_each_non_background_cell(self):
+        source = as_grid([[1, 0], [0, 1]])
+        expected = as_grid([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ])
+        self.assertEqual(stamp_by_mask(source), expected)
+
+    def test_fill_holes_and_keep_largest_object(self):
+        ring = as_grid([
+            [0, 0, 0, 0, 0],
+            [0, 2, 2, 2, 0],
+            [0, 2, 0, 2, 0],
+            [0, 2, 2, 2, 0],
+            [0, 0, 0, 0, 0],
+        ])
+        self.assertEqual(fill_holes(ring, 3)[2][2], 3)
+        objects = as_grid([
+            [0, 1, 1, 0, 0],
+            [0, 1, 1, 0, 2],
+            [0, 0, 0, 0, 0],
+        ])
+        kept = keep_largest_recolor(objects, 4)
+        self.assertEqual(kept, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
+
+    def test_append_prefix_rows_and_columns(self):
+        grid = as_grid([[1, 2], [3, 4], [5, 6]])
+        self.assertEqual(append_prefix(grid, "rows", 2),
+                         ((1, 2), (3, 4), (5, 6), (1, 2), (3, 4)))
+        self.assertEqual(append_prefix(grid, "columns", 1),
+                         ((1, 2, 1), (3, 4, 3), (5, 6, 5)))
 
     def test_gravity_preserves_lane_order(self):
         grid = as_grid([[0, 2], [3, 0], [0, 4]])
