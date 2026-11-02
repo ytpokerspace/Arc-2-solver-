@@ -8,7 +8,7 @@ from arc_r2.primitives import (
     find_objects, fit_program, flip_horizontal, flip_vertical,
     alternate_tile, append_prefix, fill_holes, generate_primitives, gravity, keep_largest_recolor,
     mirror_complete, recolor_largest_by_small_shape, recolor_largest_by_small_size,
-    rotate, stamp_by_mask, transpose,
+    rotate, stamp_by_mask, transpose, translate_pixels,
 )
 from arc_r2.primitive_benchmark import run_benchmark
 
@@ -112,6 +112,32 @@ class PrimitiveLibraryTests(unittest.TestCase):
                          ((1, 2), (3, 4), (5, 6), (1, 2), (3, 4)))
         self.assertEqual(append_prefix(grid, "columns", 1),
                          ((1, 2, 1), (3, 4, 3), (5, 6, 5)))
+
+
+    def test_move_and_copy_pixels_without_changing_grid_size(self):
+        grid = as_grid([
+            [0, 0, 0, 0],
+            [0, 2, 2, 0],
+            [0, 0, 0, 0],
+        ])
+        moved = translate_pixels(grid, 1, 1)
+        self.assertEqual(moved, as_grid([
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 2, 2],
+        ]))
+        copied = translate_pixels(grid, 1, 1, copy=True)
+        self.assertEqual(copied, as_grid([
+            [0, 0, 0, 0],
+            [0, 2, 2, 0],
+            [0, 0, 2, 2],
+        ]))
+        self.assertEqual((len(moved), len(moved[0])), (3, 4))
+
+    def test_move_only_selected_color(self):
+        grid = as_grid([[0, 1, 0, 2], [0, 0, 0, 0]])
+        moved = translate_pixels(grid, 1, 0, color=1)
+        self.assertEqual(moved, as_grid([[0, 0, 0, 2], [0, 1, 0, 0]]))
 
     def test_gravity_preserves_lane_order(self):
         grid = as_grid([[0, 2], [3, 0], [0, 4]])
