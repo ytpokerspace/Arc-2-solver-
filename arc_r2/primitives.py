@@ -49,6 +49,10 @@ def color_counts(grid: Grid) -> dict[int, int]:
 
 def background_color(grid: Grid) -> int:
     counts = color_counts(grid)
+    # ARC grids conventionally use 0 for empty/background, even when foreground
+    # pixels are more numerous (for example, dense masks and patterned sprites).
+    if 0 in counts:
+        return 0
     return min(counts, key=lambda color: (-counts[color], color))
 
 
