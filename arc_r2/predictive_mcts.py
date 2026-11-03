@@ -17,6 +17,7 @@ from .primitives import (
     Grid, Primitive, Program, as_grid, generate_primitives,
 )
 from .single_stage_memory import SingleStageMemory
+from .grid_compression import encode_grid
 
 
 @dataclass
@@ -51,6 +52,7 @@ class PredictiveSearchResult:
     hybrid_candidates: tuple[str, ...]
     memory_hit: bool = False
     memory_saved: bool = False
+    duplicate_states_pruned: int = 0
 
 
 def _distance(a: Grid, b: Grid) -> int:
@@ -117,7 +119,7 @@ def _evaluate(
 
 
 def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
-            branch_width: int) -> int:
+            branch_width: int) -> tuple[int, int]:
     node.expanded = True
     unresolved = [i for i in range(len(pairs)) if i not in node.solved]
     if not unresolved:
@@ -136,8 +138,23 @@ def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
         child.parent = node
         ranked.append((child.score, str(operation), child))
     ranked.sort(key=lambda item: (-item[0], item[1]))
-    node.children = [item[2] for item in ranked[:branch_width]]
-    return len(node.children)
+    # Collapse chains that produce identical predictions on every training pair.
+    # The compact codec is lossless and is used only as an exact state key.
+    unique = []
+    seen_states = set()
+    duplicates_pruned = 0
+    for item in ranked:
+        child = item[2]
+        state_key = tuple(encode_grid(grid) for grid in child.predictions)
+        if state_key in seen_states:
+            duplicates_pruned += 1
+            continue
+        seen_states.add(state_key)
+        unique.append(child)
+        if len(unique) >= branch_width:
+            break
+    node.children = unique
+    return len(node.children), duplicates_pruned
 
 
 def _select(node: SearchNode, exploration: float) -> SearchNode:
@@ -200,6 +217,7 @@ def search(
     root = _evaluate((), pairs, frozenset())
     assert root is not None
     nodes_created = 1
+    duplicate_states_pruned = 0
     first_hypotheses: list[str] = []
     hybrid_candidates: list[str] = []
     best: SearchNode | None = None
@@ -213,8 +231,9 @@ def search(
             _backpropagate(leaf, leaf.score)
             used_iterations += 1
             continue
-        created = _expand(leaf, pairs, branch_width)
+        created, pruned = _expand(leaf, pairs, branch_width)
         nodes_created += created
+        duplicate_states_pruned += pruned
         if leaf is root:
             first_hypotheses = [
                 (f"{child.operations[0]} | priority={child.score:.3f} "
@@ -262,5 +281,5 @@ def search(
         len(pairs) if exact else (len(best.solved) if best else 0),
         len(pairs), used_iterations, nodes_created,
         tuple(first_hypotheses), tuple(hybrid_candidates[:100]),
-        memory_saved=memory_saved,
+        memory_saved=memory_saved, duplicate_states_pruned=duplicate_states_pruned,
     )
