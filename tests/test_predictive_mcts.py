@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from arc_r2.predictive_mcts import search
-from arc_r2.primitives import as_grid, flip_horizontal, recolor
+from arc_r2.primitives import Primitive, Program, as_grid, flip_horizontal, recolor, generate_primitives
 
 
 class PredictivePairMCTSTests(unittest.TestCase):
@@ -63,6 +63,14 @@ class PredictivePairMCTSTests(unittest.TestCase):
                         iterations=50, branch_width=10, max_depth=2)
         self.assertFalse(result.exact_fit)
         self.assertIsNone(result.program)
+
+    def test_object_dsl_operations_share_the_predictive_program_path(self):
+        source = as_grid([[0, 0, 0, 0], [0, 2, 2, 0], [0, 0, 0, 0]])
+        target = as_grid([[0, 0, 0, 0], [0, 0, 2, 2], [0, 0, 0, 0]])
+        operation = Primitive("OBJECT_MOVE", (0, 1, 0))
+        self.assertEqual(Program((operation,)).apply(source), target)
+        candidates = generate_primitives((source,), (target,))
+        self.assertIn(operation, candidates)
 
     def test_only_top_ten_hypotheses_seed_the_hybrid_round(self):
         source = as_grid([[0, 1, 0], [2, 0, 0]])
