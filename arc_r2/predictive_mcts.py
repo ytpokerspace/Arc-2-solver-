@@ -1,9 +1,10 @@
-"""Predictive pair-matching MCTS for ARC-R2.
+"""QBS-guided predictive pair-matching MCTS for ARC-R2.
 
-Every node is an executable primitive chain. Exact training-pair matches become
-resolved evidence: later operations must preserve them, and their distance no
-longer contributes to search scoring. A complete solution is accepted only when
-the final program reproduces every training output exactly.
+The search first scores ten primitive hypotheses against every training pair,
+then performs one bounded hybrid round from those seeds. MCTS continues from
+that informed tree. Exact training matches are preserved as resolved evidence.
+All probability values are smoothed training-fit estimates, not calibrated
+probabilities of unseen-task success.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ class SearchNode:
     probability_estimate: float
     feasibility: float
     training_pair_success_rate: float
+    alignment_score: float
     parent: "SearchNode | None" = None
     children: list["SearchNode"] = field(default_factory=list)
     visits: int = 0
@@ -51,6 +53,14 @@ class PredictiveSearchResult:
     hybrid_candidates: tuple[str, ...]
     memory_hit: bool = False
     memory_saved: bool = False
+    hypotheses_scored: int = 0
+    hybrid_seeds: int = 0
+    hybrid_nodes_created: int = 0
+    best_probability_estimate: float = 0.0
+    best_feasibility: float = 0.0
+    best_training_pair_success_rate: float = 0.0
+    best_alignment_score: float = 0.0
+    duplicate_states_pruned: int = 0
 
 
 def _distance(a: Grid, b: Grid) -> int:
@@ -74,6 +84,18 @@ def _fingerprint(pairs: tuple[tuple[Grid, Grid], ...]) -> str:
     ).hexdigest()
 
 
+def _node_rank(node: SearchNode) -> tuple:
+    """Exact pair coverage first; soft signals only break ties."""
+    return (
+        len(node.solved),
+        node.probability_estimate,
+        node.feasibility,
+        node.alignment_score,
+        -len(node.operations),
+        tuple(str(op) for op in node.operations),
+    )
+
+
 def _evaluate(
     operations: tuple[Primitive, ...],
     pairs: tuple[tuple[Grid, Grid], ...],
@@ -81,63 +103,78 @@ def _evaluate(
 ) -> SearchNode | None:
     predictions = []
     solved = set()
+    alignments = []
     for index, (source, target) in enumerate(pairs):
         try:
             predicted = Program(operations).apply(source)
         except (ValueError, IndexError, TypeError):
+            # A candidate that cannot execute on every training input is infeasible.
             return None
-        # Once a pair is solved, a later hybrid step may not break that match.
         if index in previously_solved and predicted != target:
+            # A later hybrid step may never destroy a solved training pair.
             return None
         predictions.append(predicted)
         if predicted == target:
             solved.add(index)
+        denom = max(
+            1,
+            max(len(predicted) * len(predicted[0]), len(target) * len(target[0])),
+        )
+        alignments.append(max(0.0, 1.0 - (_distance(predicted, target) / denom)))
 
-    unresolved = [i for i in range(len(pairs)) if i not in solved]
-    if unresolved:
-        similarities = []
-        for i in unresolved:
-            target = pairs[i][1]
-            denom = max(1, max(len(predictions[i]) * len(predictions[i][0]),
-                               len(target) * len(target[0])))
-            similarities.append(1.0 - (_distance(predictions[i], target) / denom))
-        progress = sum(similarities) / len(similarities)
-    else:
-        progress = 1.0
-    # These are transparent search heuristics, not calibrated generalization probabilities.
-    probability_estimate = max(0.0, min(1.0, progress))
-    feasibility = 1.0  # Every operation in this node executed successfully.
-    training_pair_success_rate = len(solved) / len(pairs)
-    score = (0.40 * probability_estimate + 0.35 * feasibility
-             + 0.25 * training_pair_success_rate)
+    success_rate = len(solved) / len(pairs)
+    # Beta(1,1) smoothing of observed exact training-pair matches.
+    # This is not a calibrated probability of unseen-task success.
+    probability_estimate = (len(solved) + 1) / (len(pairs) + 2)
+    feasibility = 1.0  # The candidate executed on every supplied training input.
+    alignment_score = sum(alignments) / len(alignments)
+    # Exact pair success is the strongest signal; alignment helps order partial fits.
+    score = (
+        0.40 * success_rate
+        + 0.25 * probability_estimate
+        + 0.20 * alignment_score
+        + 0.15 * feasibility
+    )
     return SearchNode(
         operations, tuple(predictions), frozenset(solved), score,
-        probability_estimate, feasibility, training_pair_success_rate,
+        probability_estimate, feasibility, success_rate, alignment_score,
     )
 
 
-def _expand(node: SearchNode, pairs: tuple[tuple[Grid, Grid], ...],
-            branch_width: int) -> int:
+def _expand(
+    node: SearchNode,
+    pairs: tuple[tuple[Grid, Grid], ...],
+    branch_width: int,
+    max_depth: int,
+) -> tuple[int, int]:
     node.expanded = True
     unresolved = [i for i in range(len(pairs)) if i not in node.solved]
-    if not unresolved:
-        return 0
+    if not unresolved or len(node.operations) >= max_depth:
+        return 0, 0
+
     current_grids = tuple(node.predictions[i] for i in unresolved)
     targets = tuple(pairs[i][1] for i in unresolved)
     primitives = generate_primitives(current_grids, targets)
-    ranked: list[tuple[float, str, SearchNode]] = []
+    ranked: list[SearchNode] = []
+    seen_predictions: set[tuple[Grid, ...]] = set()
+    duplicates_pruned = 0
+
     for operation in primitives:
         operations = node.operations + (operation,)
         child = _evaluate(operations, pairs, node.solved)
         if child is None:
             continue
-        # Keep temporarily unhelpful steps: some valid transformations need
-        # an intermediate operation that only becomes useful after hybridization.
+        # Equivalent predictions on all training pairs are one search state.
+        if child.predictions in seen_predictions:
+            duplicates_pruned += 1
+            continue
+        seen_predictions.add(child.predictions)
         child.parent = node
-        ranked.append((child.score, str(operation), child))
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    node.children = [item[2] for item in ranked[:branch_width]]
-    return len(node.children)
+        ranked.append(child)
+
+    ranked.sort(key=lambda item: _node_rank(item), reverse=True)
+    node.children = ranked[:branch_width]
+    return len(node.children), duplicates_pruned
 
 
 def _select(node: SearchNode, exploration: float) -> SearchNode:
@@ -148,7 +185,9 @@ def _select(node: SearchNode, exploration: float) -> SearchNode:
             current.children,
             key=lambda child: (
                 child.mean_value
-                + exploration * math.sqrt(math.log(parent_visits + 1) / (child.visits + 1)),
+                + exploration * math.sqrt(
+                    math.log(parent_visits + 1) / (child.visits + 1)
+                ),
                 child.score,
                 tuple(str(op) for op in child.operations),
             ),
@@ -172,14 +211,19 @@ def search(
     max_depth: int = 3,
     exploration: float = 1.1,
     memory_path: str | Path | None = None,
+    hypothesis_count: int = 10,
+    hybrid_branch_width: int = 3,
 ) -> PredictiveSearchResult:
-    """Search executable hybrid programs; exact pair matches are terminal evidence."""
+    """Run ten-hypothesis scoring, one hybrid seed round, then predictive MCTS."""
     if not examples:
         raise ValueError("at least one training pair is required")
     if iterations < 1 or branch_width < 1 or max_depth < 1:
         raise ValueError("iterations, branch_width, and max_depth must be positive")
     if max_depth > 4:
         raise ValueError("max_depth must be <= 4")
+    if hypothesis_count < 2 or hybrid_branch_width < 1:
+        raise ValueError("hypothesis_count must be >= 2 and hybrid_branch_width positive")
+
     pairs = tuple((as_grid(a), as_grid(b)) for a, b in examples)
     memory = SingleStageMemory(memory_path) if memory_path else None
     fingerprint = _fingerprint(pairs)
@@ -193,6 +237,10 @@ def search(
                     return PredictiveSearchResult(
                         remembered, True, len(pairs), len(pairs), 0, 0,
                         (), (), memory_hit=True,
+                        best_probability_estimate=1.0,
+                        best_feasibility=1.0,
+                        best_training_pair_success_rate=1.0,
+                        best_alignment_score=1.0,
                     )
             except (ValueError, IndexError, TypeError):
                 pass
@@ -200,67 +248,103 @@ def search(
     root = _evaluate((), pairs, frozenset())
     assert root is not None
     nodes_created = 1
+    hypotheses_scored = 1
+    hybrid_seeds_used = 0
+    hybrid_nodes_created = 0
+    duplicate_states_pruned = 0
     first_hypotheses: list[str] = []
     hybrid_candidates: list[str] = []
     best: SearchNode | None = None
     used_iterations = 0
+    hybrid_seeded = False
 
-    for step in range(iterations):
+    def consider(candidate: SearchNode) -> None:
+        nonlocal best
+        if best is None or _node_rank(candidate) > _node_rank(best):
+            best = candidate
+
+    for _ in range(iterations):
         if best is not None and len(best.solved) == len(pairs):
             break
+
         leaf = _select(root, exploration)
-        if len(leaf.operations) >= max_depth or len(leaf.solved) == len(pairs):
-            _backpropagate(leaf, leaf.score)
-            used_iterations += 1
-            continue
-        created = _expand(leaf, pairs, branch_width)
+        created, pruned = _expand(leaf, pairs, branch_width, max_depth)
         nodes_created += created
-        if leaf is root:
+        hypotheses_scored += created
+        duplicate_states_pruned += pruned
+
+        if leaf is root and not hybrid_seeded:
+            hybrid_seeded = True
+            seeds = leaf.children[:hypothesis_count]
+            hybrid_seeds_used = len(seeds)
             first_hypotheses = [
-                (f"{child.operations[0]} | priority={child.score:.3f} "
-                 f"p_est={child.probability_estimate:.3f} "
-                 f"feasible={child.feasibility:.1f} "
-                 f"train_exact_rate={child.training_pair_success_rate:.3f}")
-                for child in leaf.children[:10]
-            ]
-        else:
-            for child in leaf.children:
-                label = (
-                    f"{' -> '.join(str(op) for op in child.operations)} "
-                    f"| priority={child.score:.3f} "
+                (
+                    f"{child.operations[-1]} | score={child.score:.3f} "
                     f"p_est={child.probability_estimate:.3f} "
                     f"feasible={child.feasibility:.1f} "
-                    f"train_exact_rate={child.training_pair_success_rate:.3f}"
+                    f"train_exact_rate={child.training_pair_success_rate:.3f} "
+                    f"alignment={child.alignment_score:.3f}"
                 )
-                if label not in hybrid_candidates:
-                    hybrid_candidates.append(label)
+                for child in seeds
+            ]
+            # One QBS-style hybrid round: expand each of the top ten ideas once.
+            for seed in seeds:
+                if len(seed.operations) >= max_depth:
+                    continue
+                hybrid_created, hybrid_pruned = _expand(
+                    seed, pairs, hybrid_branch_width, max_depth
+                )
+                hybrid_nodes_created += hybrid_created
+                nodes_created += hybrid_created
+                hypotheses_scored += hybrid_created
+                duplicate_states_pruned += hybrid_pruned
+                for child in seed.children:
+                    label = (
+                        f"{' -> '.join(str(op) for op in child.operations)} "
+                        f"| score={child.score:.3f} "
+                        f"p_est={child.probability_estimate:.3f} "
+                        f"feasible={child.feasibility:.1f} "
+                        f"train_exact_rate={child.training_pair_success_rate:.3f} "
+                        f"alignment={child.alignment_score:.3f}"
+                    )
+                    if label not in hybrid_candidates:
+                        hybrid_candidates.append(label)
+                    consider(child)
+
         if leaf.children:
             for child in leaf.children:
                 _backpropagate(child, child.score)
-                if best is None or (len(child.solved), child.score,
-                                    -len(child.operations)) > (
-                                        len(best.solved), best.score, -len(best.operations)
-                                    ):
-                    best = child
+                consider(child)
                 if len(child.solved) == len(pairs):
-                    best = child
                     break
         else:
             _backpropagate(leaf, leaf.score)
+
         used_iterations += 1
         if best is not None and len(best.solved) == len(pairs):
             break
 
     winner = Program(best.operations) if best is not None else None
-    exact = winner is not None and all(winner.apply(source) == target for source, target in pairs)
+    exact = winner is not None and all(
+        winner.apply(source) == target for source, target in pairs
+    )
     memory_saved = False
     if exact and memory is not None and winner is not None:
         memory.save(fingerprint, tuple((op.name, op.args) for op in winner.operations))
         memory_saved = True
+
     return PredictiveSearchResult(
         winner if exact else None, bool(exact),
         len(pairs) if exact else (len(best.solved) if best else 0),
         len(pairs), used_iterations, nodes_created,
         tuple(first_hypotheses), tuple(hybrid_candidates[:100]),
         memory_saved=memory_saved,
+        hypotheses_scored=hypotheses_scored,
+        hybrid_seeds=hybrid_seeds_used,
+        hybrid_nodes_created=hybrid_nodes_created,
+        best_probability_estimate=best.probability_estimate if best else 0.0,
+        best_feasibility=best.feasibility if best else 0.0,
+        best_training_pair_success_rate=best.training_pair_success_rate if best else 0.0,
+        best_alignment_score=best.alignment_score if best else 0.0,
+        duplicate_states_pruned=duplicate_states_pruned,
     )
