@@ -23,6 +23,8 @@ from .solver import Example, HybridSolver
 
 def leave_one_out_folds(pairs):
     """Yield (heldout_index, visible_training_pairs, heldout_pair)."""
+    if len(pairs) < 2:
+        return
     for heldout_index, heldout in enumerate(pairs):
         visible = tuple(pair for index, pair in enumerate(pairs)
                         if index != heldout_index)
