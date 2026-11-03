@@ -212,7 +212,7 @@ def search(
     exploration: float = 1.1,
     memory_path: str | Path | None = None,
     hypothesis_count: int = 10,
-    hybrid_branch_width: int = 3,
+    hybrid_branch_width: int = 5,
 ) -> PredictiveSearchResult:
     """Run ten-hypothesis scoring, one hybrid seed round, then predictive MCTS."""
     if not examples:
@@ -237,7 +237,7 @@ def search(
                     return PredictiveSearchResult(
                         remembered, True, len(pairs), len(pairs), 0, 0,
                         (), (), memory_hit=True,
-                        best_probability_estimate=1.0,
+                        best_probability_estimate=(len(pairs) + 1) / (len(pairs) + 2),
                         best_feasibility=1.0,
                         best_training_pair_success_rate=1.0,
                         best_alignment_score=1.0,
