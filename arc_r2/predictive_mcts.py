@@ -180,13 +180,15 @@ def _expand(
             duplicates_pruned += 1
             continue
         seen_predictions.add(fingerprint)
-        if seen_states is not None:
-            seen_states.add(fingerprint)
         child.parent = node
         ranked.append(child)
 
     ranked.sort(key=lambda item: _node_rank(item), reverse=True)
     node.children = ranked[:branch_width]
+    # Only retain fingerprints for children that actually enter the tree;
+    # discarded candidates must not block a better path discovered later.
+    if seen_states is not None:
+        seen_states.update(_state_fingerprint(child.predictions) for child in node.children)
     return len(node.children), duplicates_pruned
 
 
