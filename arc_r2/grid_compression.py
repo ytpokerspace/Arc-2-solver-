@@ -1,12 +1,13 @@
-"""Lossless compact encoding for ARC grids and search-state fingerprints.
+"""Lossless compact encoding for ARC grids and exact search-state fingerprints.
 
-The codec uses palette-indexed run-length encoding when it is smaller than raw
-cell bytes. Otherwise it stores raw cells. Decoding always reconstructs the
-original integer grid exactly.
+The codec uses palette-indexed run-length encoding only when it is smaller
+than raw cells. ARC grids are limited to 30x30. Decoding rejects malformed
+and non-canonical payloads and always reconstructs the exact integer grid.
 """
 from __future__ import annotations
 
 _MAGIC = b"AGC1"
+_MAX_SIDE = 30
 
 
 def _varint(value: int) -> bytes:
@@ -31,12 +32,12 @@ def _read_varint(data: bytes, offset: int) -> tuple[int, int]:
 
 
 def encode_grid(grid: tuple[tuple[int, ...], ...]) -> bytes:
-    """Encode a rectangular ARC grid losslessly; choose the smaller payload."""
+    """Encode a non-empty rectangular ARC grid losslessly."""
     if not grid or not grid[0] or any(len(row) != len(grid[0]) for row in grid):
         raise ValueError("grid must be non-empty and rectangular")
     height, width = len(grid), len(grid[0])
-    if height > 65535 or width > 65535:
-        raise ValueError("grid dimensions exceed codec limits")
+    if height > _MAX_SIDE or width > _MAX_SIDE:
+        raise ValueError("ARC grid dimensions must not exceed 30x30")
     cells = [cell for row in grid for cell in row]
     if any(type(cell) is not int or not 0 <= cell <= 9 for cell in cells):
         raise ValueError("grid cells must be integers from 0 to 9")
@@ -61,13 +62,13 @@ def encode_grid(grid: tuple[tuple[int, ...], ...]) -> bytes:
 
 
 def decode_grid(encoded: bytes) -> tuple[tuple[int, ...], ...]:
-    """Decode an encode_grid payload, rejecting malformed or non-canonical data."""
-    if len(encoded) < 8 or encoded[:4] != _MAGIC:
+    """Decode a canonical encode_grid payload, rejecting malformed data."""
+    if not isinstance(encoded, bytes) or len(encoded) < 9 or encoded[:4] != _MAGIC:
         raise ValueError("invalid grid encoding header")
     height = int.from_bytes(encoded[4:6], "big")
     width = int.from_bytes(encoded[6:8], "big")
-    mode = encoded[8] if len(encoded) > 8 else -1
-    if not height or not width or mode not in (0, 1):
+    mode = encoded[8]
+    if not 1 <= height <= _MAX_SIDE or not 1 <= width <= _MAX_SIDE or mode not in (0, 1):
         raise ValueError("invalid grid dimensions or encoding mode")
     payload = encoded[9:]
     count = height * width
@@ -82,17 +83,30 @@ def decode_grid(encoded: bytes) -> tuple[tuple[int, ...], ...]:
         if not 1 <= palette_size <= 10 or len(payload) < 1 + palette_size:
             raise ValueError("invalid palette")
         palette = payload[1:1 + palette_size]
-        if any(value > 9 for value in palette) or len(set(palette)) != len(palette):
-            raise ValueError("invalid palette colors")
+        if (
+            any(value > 9 for value in palette)
+            or tuple(palette) != tuple(sorted(set(palette)))
+        ):
+            raise ValueError("palette must contain sorted unique ARC colors")
         cells = []
         offset = 1 + palette_size
+        previous_index = None
         while offset < len(payload):
             index = payload[offset]
             offset += 1
             run, offset = _read_varint(payload, offset)
-            if index >= palette_size or run < 1 or len(cells) + run > count:
+            if (
+                index >= palette_size or run < 1
+                or index == previous_index
+                or len(cells) + run > count
+            ):
                 raise ValueError("invalid palette run")
             cells.extend([palette[index]] * run)
+            previous_index = index
         if len(cells) != count:
             raise ValueError("decoded cell count does not match dimensions")
-    return tuple(tuple(cells[r * width:(r + 1) * width]) for r in range(height))
+
+    grid = tuple(tuple(cells[r * width:(r + 1) * width]) for r in range(height))
+    if encode_grid(grid) != encoded:
+        raise ValueError("non-canonical grid encoding")
+    return grid
