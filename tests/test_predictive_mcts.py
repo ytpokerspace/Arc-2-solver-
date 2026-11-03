@@ -20,6 +20,9 @@ class PredictivePairMCTSTests(unittest.TestCase):
             self.assertTrue(first.first_hypotheses)
             self.assertIn("p_est=", first.first_hypotheses[0])
             self.assertIn("train_exact_rate=", first.first_hypotheses[0])
+            self.assertEqual(first.best_probability_estimate, 2 / 3)
+            self.assertEqual(first.best_feasibility, 1.0)
+            self.assertEqual(first.best_training_pair_success_rate, 1.0)
             self.assertTrue(first.memory_saved)
 
             second = search(((source, target),), iterations=100,
@@ -38,6 +41,8 @@ class PredictivePairMCTSTests(unittest.TestCase):
         self.assertEqual(len(result.program.operations), 2)
         self.assertEqual(result.program.apply(source), target)
         self.assertTrue(result.hybrid_candidates)
+        self.assertGreater(result.hybrid_seeds, 0)
+        self.assertGreater(result.hybrid_nodes_created, 0)
 
     def test_every_training_pair_must_match(self):
         source_a = as_grid([[0, 1], [0, 0]])
@@ -58,6 +63,14 @@ class PredictivePairMCTSTests(unittest.TestCase):
                         iterations=50, branch_width=10, max_depth=2)
         self.assertFalse(result.exact_fit)
         self.assertIsNone(result.program)
+
+    def test_only_top_ten_hypotheses_seed_the_hybrid_round(self):
+        source = as_grid([[0, 1, 0], [2, 0, 0]])
+        target = flip_horizontal(recolor(source, 1, 3))
+        result = search(((source, target),), iterations=100,
+                        branch_width=15, max_depth=3, hypothesis_count=10)
+        self.assertLessEqual(result.hybrid_seeds, 10)
+        self.assertGreater(result.hypotheses_scored, 1)
 
 
 if __name__ == "__main__":
