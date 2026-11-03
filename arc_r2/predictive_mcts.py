@@ -18,6 +18,15 @@ from .primitives import (
     Grid, Primitive, Program, as_grid, generate_primitives,
 )
 from .single_stage_memory import SingleStageMemory
+from .grid_compression import encode_grid
+
+
+def _state_fingerprint(predictions: tuple[Grid, ...]):
+    """Lossless state key; fall back to exact tuples for oversized intermediates."""
+    try:
+        return tuple(encode_grid(grid) for grid in predictions)
+    except ValueError:
+        return predictions
 
 
 @dataclass
@@ -146,6 +155,7 @@ def _expand(
     pairs: tuple[tuple[Grid, Grid], ...],
     branch_width: int,
     max_depth: int,
+    seen_states: set | None = None,
 ) -> tuple[int, int]:
     node.expanded = True
     unresolved = [i for i in range(len(pairs)) if i not in node.solved]
@@ -156,7 +166,7 @@ def _expand(
     targets = tuple(pairs[i][1] for i in unresolved)
     primitives = generate_primitives(current_grids, targets)
     ranked: list[SearchNode] = []
-    seen_predictions: set[tuple[Grid, ...]] = set()
+    seen_predictions: set[object] = set()
     duplicates_pruned = 0
 
     for operation in primitives:
@@ -165,10 +175,13 @@ def _expand(
         if child is None:
             continue
         # Equivalent predictions on all training pairs are one search state.
-        if child.predictions in seen_predictions:
+        fingerprint = _state_fingerprint(child.predictions)
+        if fingerprint in seen_predictions or (seen_states is not None and fingerprint in seen_states):
             duplicates_pruned += 1
             continue
-        seen_predictions.add(child.predictions)
+        seen_predictions.add(fingerprint)
+        if seen_states is not None:
+            seen_states.add(fingerprint)
         child.parent = node
         ranked.append(child)
 
@@ -247,6 +260,7 @@ def search(
 
     root = _evaluate((), pairs, frozenset())
     assert root is not None
+    seen_states = {_state_fingerprint(root.predictions)}
     nodes_created = 1
     hypotheses_scored = 1
     hybrid_seeds_used = 0
@@ -268,7 +282,7 @@ def search(
             break
 
         leaf = _select(root, exploration)
-        created, pruned = _expand(leaf, pairs, branch_width, max_depth)
+        created, pruned = _expand(leaf, pairs, branch_width, max_depth, seen_states)
         nodes_created += created
         hypotheses_scored += created
         duplicate_states_pruned += pruned
@@ -292,7 +306,7 @@ def search(
                 if len(seed.operations) >= max_depth:
                     continue
                 hybrid_created, hybrid_pruned = _expand(
-                    seed, pairs, hybrid_branch_width, max_depth
+                    seed, pairs, hybrid_branch_width, max_depth, seen_states
                 )
                 hybrid_nodes_created += hybrid_created
                 nodes_created += hybrid_created
