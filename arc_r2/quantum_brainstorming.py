@@ -27,7 +27,6 @@ class Hypothesis:
 
     @property
     def rank(self) -> tuple[float, float, float, float]:
-        # Exact training fit and executable feasibility outrank soft signals.
         return (
             float(self.fit_rate == 1.0),
             self.estimated_probability,
@@ -60,6 +59,8 @@ def quantum_brainstorm_search(
         raise ValueError("at least one training example is required")
     if rounds < 1 or elite_size < 2:
         raise ValueError("rounds must be positive and elite_size at least 2")
+    if limits.max_depth < 0:
+        raise ValueError("max_depth cannot be negative")
 
     cache: dict[tuple[str, ...], Hypothesis] = {}
 
@@ -84,8 +85,6 @@ def quantum_brainstorm_search(
             for prediction, example in zip(predictions, examples)
         )
         fit_rate = exact_count / len(examples)
-        # Beta(1, 1) smoothing: an engineering estimate from observed fit,
-        # not a calibrated estimate of unseen ARC-task success.
         estimated_probability = (exact_count + 1) / (len(examples) + 2)
         try:
             heuristic = float(score(program))
@@ -97,17 +96,20 @@ def quantum_brainstorm_search(
         stats.expanded += 1
         return hypothesis
 
-    # Round zero: independently test every primitive and identity.
+    # Identity is valid at depth zero; never seed a program deeper than max_depth.
     evaluate(Program())
-    operations = OPERATIONS if limits.include_prte else tuple(
-        operation for operation in OPERATIONS if operation != "PRTE.POLARITY.REVERSE"
-    )
-    for operation in operations:
-        evaluate(Program().then(operation))
+    if limits.max_depth >= 1 and not stats.stopped_by_cap:
+        operations = OPERATIONS if limits.include_prte else tuple(
+            operation for operation in OPERATIONS if operation != "PRTE.POLARITY.REVERSE"
+        )
+        for operation in operations:
+            if stats.evaluated >= limits.candidate_cap:
+                stats.stopped_by_cap = True
+                break
+            evaluate(Program().then(operation))
 
     elite = sorted(cache.values(), key=lambda item: item.rank, reverse=True)[:elite_size]
 
-    # Iteratively hybridize the best hypotheses in both operation orders.
     for _ in range(rounds):
         if stats.stopped_by_cap or len(elite) < 2:
             break
@@ -128,13 +130,10 @@ def quantum_brainstorm_search(
                 break
             evaluate(program)
 
-        if not cache:
-            break
         next_elite = sorted(cache.values(), key=lambda item: item.rank, reverse=True)[:elite_size]
         if [h.program.canonical() for h in next_elite] == [
             h.program.canonical() for h in elite
         ]:
-            # No new better hypotheses: remaining rounds would repeat work.
             elite = next_elite
             break
         elite = next_elite
