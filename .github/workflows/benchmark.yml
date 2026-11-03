@@ -11,7 +11,10 @@ on:
   pull_request:
     paths:
       - "arc_r2/primitives.py"
+      - "arc_r2/predictive_mcts.py"
+      - "arc_r2/predictive_mcts_benchmark.py"
       - "arc_r2/primitive_benchmark.py"
+      - "tests/test_predictive_mcts.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
@@ -56,8 +59,7 @@ jobs:
           name: arc-r2-primitive-benchmark
           path: arc_r2_primitive_benchmark.json
           if-no-files-found: warn
-
-      - name: Run predictive pair-matching MCTS benchmark
+      - name: Run QBS-guided predictive pair-matching MCTS benchmark
         env:
           TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
         run: python -m arc_r2.predictive_mcts_benchmark --dataset arc-agi-2-data/data/training --limit "$TASK_LIMIT" --iterations 40 --branch-width 10 --max-depth 3 --memory .arc_r2_predictive_mcts_memory.json --output arc_r2_predictive_mcts_benchmark.json
