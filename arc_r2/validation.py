@@ -83,9 +83,15 @@ def evaluate_variant(tasks, variant, max_depth=3, candidate_cap=1200,
                 limits, strategy=strategy, use_object_signal=use_objects
             ).solve(examples)
 
-            prediction = result.program.apply(as_grid(heldout["input"]))
             target = as_grid(heldout["output"])
-            exact = prediction == target
+            error = None
+            try:
+                prediction = result.program.apply(as_grid(heldout["input"]))
+                exact = prediction == target
+            except Exception as exc:
+                prediction = None
+                exact = False
+                error = f"{type(exc).__name__}: {exc}"
             heldout_total += 1
             heldout_exact += int(exact)
             train_exact += result.exact_examples
@@ -101,6 +107,7 @@ def evaluate_variant(tasks, variant, max_depth=3, candidate_cap=1200,
                 "heldout_exact": exact,
                 "selected_program": str(result.program),
                 "candidate_evaluations": result.candidates_evaluated,
+                "error": error,
             })
         fully_correct_tasks += int(task_correct)
 
