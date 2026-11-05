@@ -1,52 +1,70 @@
-name: ARC-R2 public training comparison
+name: ARC-R2 primitive-only public training benchmark
 on:
   push:
     branches: [main]
     paths:
-      - "arc_r2/compare_engines.py"
-      - "arc_r2/object_solver.py"
+      - "arc_r2/primitives.py"
+      - "arc_r2/predictive_mcts.py"
+      - "arc_r2/predictive_mcts_benchmark.py"
+      - "arc_r2/primitive_benchmark.py"
+      - ".github/workflows/benchmark.yml"
+  pull_request:
+    paths:
+      - "arc_r2/primitives.py"
+      - "arc_r2/primitive_benchmark.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       task_limit:
-        description: "Number of public training tasks to sample"
+        description: "Number of public ARC-AGI-2 training tasks"
         required: false
         default: "20"
 permissions:
   contents: read
 jobs:
-  compare:
+  primitive-benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Check out ARC-R2 solver
         uses: actions/checkout@v4
-      - name: Check out pinned official ARC-AGI-2 training data
+      - name: Check out pinned public ARC-AGI-2 training data
         uses: actions/checkout@v4
         with:
           repository: arcprize/ARC-AGI-2
           ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
           path: arc-agi-2-data
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Record benchmark source and run paired comparison
+      - name: Restore single-stage rule memory
+        uses: actions/cache@v4
+        with:
+          path: .arc_r2_single_stage_memory.json
+          key: arc-r2-single-stage-memory-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            arc-r2-single-stage-memory-${{ github.ref_name }}-
+            arc-r2-single-stage-memory-
+      - name: Run deterministic primitive benchmark (no MCTS, no beam search)
         env:
           TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
-        run: |
-          echo "ARC-AGI-2 source commit: f3283f727488ad98fe575ea6a5ac981e4a188e49"
-          python -m arc_r2.compare_engines \
-            --dataset arc-agi-2-data/data/training \
-            --limit "$TASK_LIMIT" \
-            --max-depth 1 \
-            --candidate-cap 120 \
-            --mcts-iterations 20 \
-            --output arc_r2_engine_comparison.json
-      - name: Upload comparison report
+        run: python -m arc_r2.primitive_benchmark --dataset arc-agi-2-data/data/training --limit "$TASK_LIMIT" --max-depth 2 --candidate-cap 1500 --memory .arc_r2_single_stage_memory.json --output arc_r2_primitive_benchmark.json
+      - name: Upload primitive benchmark report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: arc-r2-engine-comparison
-          path: arc_r2_engine_comparison.json
+          name: arc-r2-primitive-benchmark
+          path: arc_r2_primitive_benchmark.json
+          if-no-files-found: warn
+
+      - name: Run predictive pair-matching MCTS benchmark
+        env:
+          TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
+        run: python -m arc_r2.predictive_mcts_benchmark --dataset arc-agi-2-data/data/training --limit "$TASK_LIMIT" --iterations 40 --branch-width 10 --max-depth 3 --memory .arc_r2_predictive_mcts_memory.json --output arc_r2_predictive_mcts_benchmark.json
+      - name: Upload predictive MCTS benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-predictive-mcts-benchmark
+          path: arc_r2_predictive_mcts_benchmark.json
           if-no-files-found: warn

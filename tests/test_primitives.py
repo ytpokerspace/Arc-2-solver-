@@ -1,0 +1,232 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from arc_r2.primitives import (
+    Program, Primitive, apply_primitive, as_grid, background_color,
+    find_objects, fit_program, flip_horizontal, flip_vertical,
+    alternate_tile, append_prefix, fill_holes, generate_primitives, gravity, keep_largest_recolor,
+    mirror_complete, recolor_largest_by_small_shape, recolor_largest_by_small_size,
+    rotate, stamp_by_mask, transpose, translate_pixels, transform_objects,
+)
+from arc_r2.primitive_benchmark import run_benchmark
+
+
+class PrimitiveLibraryTests(unittest.TestCase):
+    def test_geometric_operations(self):
+        grid = as_grid([[1, 2, 3], [4, 5, 6]])
+        self.assertEqual(rotate(grid, 1), ((4, 1), (5, 2), (6, 3)))
+        self.assertEqual(rotate(grid, 2), ((6, 5, 4), (3, 2, 1)))
+        self.assertEqual(flip_horizontal(grid), ((3, 2, 1), (6, 5, 4)))
+        self.assertEqual(flip_vertical(grid), ((4, 5, 6), (1, 2, 3)))
+        self.assertEqual(transpose(grid), ((1, 4), (2, 5), (3, 6)))
+
+    def test_object_detection_four_and_eight_connected(self):
+        grid = as_grid([[0, 2], [2, 0]])
+        self.assertEqual(len(find_objects(grid, 4)), 2)
+        self.assertEqual(len(find_objects(grid, 8)), 1)
+        obj = find_objects(as_grid([[0, 0, 0], [0, 3, 3], [0, 3, 0]]))[0]
+        self.assertEqual((obj.color, obj.size, obj.bbox), (3, 3, (1, 1, 2, 2)))
+
+    def test_alternating_tile_repeats_with_row_reflection(self):
+        source = as_grid([[7, 9], [4, 3]])
+        expected = as_grid([
+            [7, 9, 7, 9, 7, 9],
+            [4, 3, 4, 3, 4, 3],
+            [9, 7, 9, 7, 9, 7],
+            [3, 4, 3, 4, 3, 4],
+            [7, 9, 7, 9, 7, 9],
+            [4, 3, 4, 3, 4, 3],
+        ])
+        self.assertEqual(alternate_tile(source, 3, 3, "row_flip_h"), expected)
+        fit = fit_program(((source, expected),), candidate_cap=5000, max_depth=1)
+        self.assertTrue(fit.exact_fit)
+        self.assertEqual(fit.program.apply(source), expected)
+
+    def test_mask_stamp_expands_each_non_background_cell(self):
+        source = as_grid([[1, 0], [0, 1]])
+        expected = as_grid([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ])
+        self.assertEqual(stamp_by_mask(source), expected)
+
+    def test_zero_is_background_even_when_foreground_is_more_common(self):
+        dense = as_grid([[6, 6, 0], [6, 0, 0], [0, 6, 6]])
+        self.assertEqual(background_color(dense), 0)
+        stamped = stamp_by_mask(dense)
+        self.assertEqual((len(stamped), len(stamped[0])), (9, 9))
+
+    def test_largest_object_color_can_depend_on_small_object_shape(self):
+        grid = as_grid([
+            [0, 1, 1, 0, 0],
+            [0, 1, 1, 0, 2],
+            [0, 0, 0, 0, 0],
+        ])
+        mapping = ((((0, 0),), 4),)
+        result = recolor_largest_by_small_shape(grid, mapping)
+        self.assertEqual(result, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
+
+    def test_largest_object_color_can_depend_on_small_object_size(self):
+        grid = as_grid([
+            [0, 1, 1, 0, 0],
+            [0, 1, 1, 0, 2],
+            [0, 0, 0, 0, 0],
+        ])
+        result = recolor_largest_by_small_size(grid, ((1, 4),))
+        self.assertEqual(result, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
+
+    def test_fill_holes_and_keep_largest_object(self):
+        ring = as_grid([
+            [0, 0, 0, 0, 0],
+            [0, 2, 2, 2, 0],
+            [0, 2, 0, 2, 0],
+            [0, 2, 2, 2, 0],
+            [0, 0, 0, 0, 0],
+        ])
+        self.assertEqual(fill_holes(ring, 3)[2][2], 3)
+        objects = as_grid([
+            [0, 1, 1, 0, 0],
+            [0, 1, 1, 0, 2],
+            [0, 0, 0, 0, 0],
+        ])
+        kept = keep_largest_recolor(objects, 4)
+        self.assertEqual(kept, ((0, 4, 4, 0, 0), (0, 4, 4, 0, 0), (0, 0, 0, 0, 0)))
+
+    def test_target_only_color_is_available_to_recolor(self):
+        source = as_grid([[0, 1], [1, 0]])
+        recolored = as_grid([[0, 2], [2, 0]])
+        target = append_prefix(recolored, "rows", 1)
+        primitives = generate_primitives((source,), (target,))
+        self.assertIn(Primitive("RECOLOR", (1, 2)), primitives)
+        result = fit_program(((source, target),), candidate_cap=5000, max_depth=2)
+        self.assertTrue(result.exact_fit)
+        self.assertEqual(result.program.apply(source), target)
+
+    def test_append_prefix_rows_and_columns(self):
+        grid = as_grid([[1, 2], [3, 4], [5, 6]])
+        self.assertEqual(append_prefix(grid, "rows", 2),
+                         ((1, 2), (3, 4), (5, 6), (1, 2), (3, 4)))
+        self.assertEqual(append_prefix(grid, "columns", 1),
+                         ((1, 2, 1), (3, 4, 3), (5, 6, 5)))
+
+
+
+    def test_rotate_and_reflect_each_square_object(self):
+        grid = as_grid([
+            [0, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 0],
+        ])
+        self.assertEqual(transform_objects(grid, "rotate"), as_grid([
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 1, 1, 1, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+        ]))
+        self.assertEqual(transform_objects(grid, "flip_h"), as_grid([
+            [0, 0, 0, 0, 0],
+            [0, 0, 1, 1, 0],
+            [0, 0, 1, 0, 0],
+            [0, 1, 1, 0, 0],
+            [0, 0, 0, 0, 0],
+        ]))
+
+    def test_move_and_copy_pixels_without_changing_grid_size(self):
+        grid = as_grid([
+            [0, 0, 0, 0],
+            [0, 2, 2, 0],
+            [0, 0, 0, 0],
+        ])
+        moved = translate_pixels(grid, 1, 1)
+        self.assertEqual(moved, as_grid([
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 2, 2],
+        ]))
+        copied = translate_pixels(grid, 1, 1, copy=True)
+        self.assertEqual(copied, as_grid([
+            [0, 0, 0, 0],
+            [0, 2, 2, 0],
+            [0, 0, 2, 2],
+        ]))
+        self.assertEqual((len(moved), len(moved[0])), (3, 4))
+
+    def test_move_only_selected_color(self):
+        grid = as_grid([[0, 1, 0, 2], [0, 0, 0, 0]])
+        moved = translate_pixels(grid, 1, 0, color=1)
+        self.assertEqual(moved, as_grid([[0, 0, 0, 2], [0, 1, 0, 0]]))
+
+    def test_gravity_preserves_lane_order(self):
+        grid = as_grid([[0, 2], [3, 0], [0, 4]])
+        self.assertEqual(gravity(grid, "down"), ((0, 0), (0, 2), (3, 4)))
+        self.assertEqual(gravity(grid, "left"), ((2, 0), (3, 0), (4, 0)))
+
+    def test_mirror_completion_and_program(self):
+        grid = as_grid([[0, 2, 0], [0, 0, 0]])
+        self.assertEqual(mirror_complete(grid, "horizontal"), ((0, 2, 0), (0, 0, 0)))
+        program = Program((Primitive("FLIP_H"),))
+        self.assertEqual(program.apply(as_grid([[1, 2]])), ((2, 1),))
+
+    def test_single_stage_memory_skips_known_rule_and_searches_alternatives(self):
+        source = as_grid([[0, 1, 0], [2, 0, 0]])
+        target = flip_horizontal(source)
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "single-stage.json"
+            first = fit_program(((source, target),), candidate_cap=5000,
+                                max_depth=1, memory_path=str(memory_path))
+            self.assertTrue(first.exact_fit)
+            self.assertTrue(first.memory_saved)
+            self.assertTrue(memory_path.exists())
+
+            second = fit_program(((source, target),), candidate_cap=5000,
+                                 max_depth=1, memory_path=str(memory_path))
+            self.assertTrue(second.exact_fit)
+            self.assertTrue(second.memory_hit)
+            self.assertGreater(second.candidates_evaluated, 0)
+            self.assertEqual(second.program.apply(source), target)
+
+    def test_exact_fit_required_and_shortest_program(self):
+        source = as_grid([[0, 1], [0, 0]])
+        target = rotate(source, 1)
+        result = fit_program(((source, target),), candidate_cap=5000, max_depth=1)
+        self.assertTrue(result.exact_fit)
+        self.assertEqual(result.program.apply(source), target)
+        # A deliberately inconsistent pair set must not yield a partial-fit guess.
+        impossible = fit_program(
+            ((as_grid([[0, 1]]), as_grid([[1, 0]])),
+             (as_grid([[0, 1]]), as_grid([[0, 1]]))),
+            candidate_cap=5000, max_depth=1,
+        )
+        self.assertFalse(impossible.exact_fit)
+        self.assertIsNone(impossible.program)
+
+
+class PrimitiveBenchmarkTests(unittest.TestCase):
+    def test_leave_one_training_pair_out_and_never_reads_test(self):
+        task = {
+            "task_id": "flip-demo",
+            "train": [
+                {"input": [[0, 1], [0, 0]], "output": [[1, 0], [0, 0]]},
+                {"input": [[0, 2], [0, 0]], "output": [[2, 0], [0, 0]]},
+            ],
+            "test": [{"input": "deliberately invalid and must not be parsed"}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.json"
+            path.write_text(json.dumps([task]), encoding="utf-8")
+            report = run_benchmark(path, limit=1, candidate_cap=5000, max_depth=1)
+        self.assertFalse(report["mcts_used"])
+        self.assertFalse(report["beam_search_used"])
+        self.assertEqual(report["folds"], 2)
+        self.assertEqual(report["held_out_exact"], 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
