@@ -6,7 +6,7 @@ This protocol does not claim that calibration measures IQ.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping, Sequence, TypeVar
 
 RUBRIC_WEIGHTS = {
     "factual_correctness": 0.35, "completeness": 0.25, "reasoning": 0.20,
@@ -121,3 +121,25 @@ def run_calibration(
             stop_reason = "CONSECUTIVE_CORRECT_THRESHOLD_REACHED"
             break
     return CalibrationReport(tuple(records), initial_score, score, adjustment, stopped_early, stop_reason)
+
+ResultT = TypeVar("ResultT")
+Brainstorm = Callable[[str, CalibrationReport], ResultT]
+
+def run_calibrated_session(
+    user_question: str,
+    calibration_questions: Sequence[CalibrationQuestion],
+    generate: AnswerGenerator,
+    evaluate: AnswerEvaluator,
+    brainstorm: Brainstorm[ResultT],
+) -> tuple[CalibrationReport, ResultT]:
+    """Mandatory orchestration entry point: calibrate first, then brainstorm.
+
+    The user's actual question is not passed to the brainstorming callback
+    until the pre-test finishes. The report is passed alongside it so the
+    studio can adjust confidence handling without weakening exact-match gates.
+    """
+    if not user_question.strip():
+        raise ValueError("USER_QUESTION_REQUIRED")
+    report = run_calibration(calibration_questions, generate, evaluate)
+    result = brainstorm(user_question, report)
+    return report, result
