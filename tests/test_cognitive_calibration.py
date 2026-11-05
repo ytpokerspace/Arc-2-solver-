@@ -1,5 +1,5 @@
 import unittest
-from arc_r2.cognitive_calibration import CalibrationQuestion, Evaluation, GeneratedAnswer, run_calibration, weighted_quality
+from arc_r2.cognitive_calibration import CalibrationQuestion, Evaluation, GeneratedAnswer, run_calibration, run_calibrated_session, weighted_quality
 
 def grade(correct=True):
     return Evaluation(correct, {
@@ -49,6 +49,25 @@ class CognitiveCalibrationTests(unittest.TestCase):
 
     def test_weighted_rubric(self):
         self.assertAlmostEqual(weighted_quality(grade()), 1.0)
+
+    def test_brainstorming_runs_only_after_calibration(self):
+        events = []
+        def generate(prompt):
+            events.append("generate")
+            return GeneratedAnswer("Answer", 90.0)
+        def evaluate(question, answer):
+            events.append("evaluate")
+            return grade()
+        def brainstorm(question, report):
+            events.append("brainstorm")
+            self.assertEqual(question, "Solve this task")
+            self.assertEqual(report.questions_used, 3)
+            return "started"
+        report, result = run_calibrated_session("Solve this task", self.questions, generate, evaluate, brainstorm)
+        self.assertEqual(result, "started")
+        self.assertEqual(events[-1], "brainstorm")
+        self.assertEqual(events.count("generate"), 3)
+        self.assertEqual(events.count("evaluate"), 3)
 
 if __name__ == "__main__":
     unittest.main()
