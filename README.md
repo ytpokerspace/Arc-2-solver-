@@ -57,3 +57,6 @@ The benchmark reports exact held-out training-pair accuracy, fit coverage, candi
 - No claim that the system has solved ARC-AGI-2.
 
 The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
+
+## Emoji representation experiment
+The isolated `experiment/emoji-grid-encoding` branch adds three comparable views: the existing integer grid, a one-emoji-per-cell grid, and an emoji-labeled connected-object graph with spatial relations. The codec benchmark checks exact reconstruction and reports conversion time and serialized JSON size. These are representation measurements only, not ARC solve-rate or search-speed results. See `research/EMOJI_REPRESENTATION_EXPERIMENT.md`.
