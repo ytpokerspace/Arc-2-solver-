@@ -1,4 +1,4 @@
-"""Leave-one-training-pair-out benchmark for predictive pair-matching MCTS."""
+"""Leave-one-training-pair-out benchmark for QBS-guided predictive MCTS."""
 from __future__ import annotations
 
 import argparse
@@ -73,6 +73,14 @@ def run_benchmark(
                 "solved_pairs": result.solved_pairs,
                 "iterations": result.iterations,
                 "nodes_created": result.nodes_created,
+                "hypotheses_scored": result.hypotheses_scored,
+                "hybrid_seeds": result.hybrid_seeds,
+                "hybrid_nodes_created": result.hybrid_nodes_created,
+                "best_probability_estimate": result.best_probability_estimate,
+                "best_feasibility": result.best_feasibility,
+                "best_training_pair_success_rate": result.best_training_pair_success_rate,
+                "best_alignment_score": result.best_alignment_score,
+                "duplicate_states_pruned": result.duplicate_states_pruned,
                 "first_hypotheses": list(result.first_hypotheses),
                 "hybrid_candidates": list(result.hybrid_candidates),
                 "memory_hit": result.memory_hit,
@@ -85,12 +93,20 @@ def run_benchmark(
     elapsed = time.perf_counter() - started
     exact = sum(row["held_out_exact"] for row in folds)
     fit = sum(row["fit_exact"] for row in folds)
+    count = max(1, len(folds))
     return {
-        "engine": "predictive-pair-matching-mcts",
-        "search_methods": ["10 ranked first-step hypotheses", "predictive intermediate-grid scoring",
-                           "MCTS UCT selection", "hybrid primitive composition",
-                           "exact pair-match stopping and preservation"],
+        "engine": "qbs-guided-predictive-pair-matching-mcts",
+        "search_methods": [
+            "score ten first-step hypotheses on every training pair",
+            "one bounded hybrid expansion from the top hypotheses",
+            "MCTS UCT selection and backpropagation",
+            "preserve solved training pairs",
+            "accept only exact fits on every supplied training pair",
+        ],
         "probability_score_calibrated": False,
+        "probability_definition": "Beta(1,1)-smoothed exact training-pair match rate; not unseen-task probability",
+        "feasibility_definition": "1.0 only when the candidate executes on every supplied training input; invalid candidates are rejected",
+        "alignment_definition": "mean normalized cell agreement across supplied training pairs",
         "mcts_used": True,
         "beam_search_used": False,
         "dataset": dataset.name,
@@ -100,7 +116,14 @@ def run_benchmark(
         "folds": len(folds),
         "fit_folds_with_exact_program": fit,
         "held_out_exact": exact,
-        "held_out_accuracy": exact / len(folds) if folds else 0.0,
+        "held_out_accuracy": exact / count if folds else 0.0,
+        "mean_hypotheses_scored": sum(row["hypotheses_scored"] for row in folds) / count,
+        "mean_hybrid_seeds": sum(row["hybrid_seeds"] for row in folds) / count,
+        "mean_hybrid_nodes_created": sum(row["hybrid_nodes_created"] for row in folds) / count,
+        "mean_duplicate_states_pruned": sum(row["duplicate_states_pruned"] for row in folds) / count,
+        "mean_probability_estimate": sum(row["best_probability_estimate"] for row in folds) / count,
+        "mean_feasibility": sum(row["best_feasibility"] for row in folds) / count,
+        "mean_training_pair_success_rate": sum(row["best_training_pair_success_rate"] for row in folds) / count,
         "iterations_per_fold": iterations,
         "branch_width": branch_width,
         "max_depth": max_depth,
@@ -113,7 +136,7 @@ def run_benchmark(
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Benchmark predictive ARC-R2 MCTS on training pairs")
+    parser = argparse.ArgumentParser(description="Benchmark QBS-guided predictive ARC-R2 MCTS")
     parser.add_argument("--dataset", required=True, type=Path)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=40)
@@ -131,10 +154,12 @@ def main(argv=None) -> int:
     report = run_benchmark(args.dataset, args.limit, args.iterations,
                            args.branch_width, args.max_depth, args.memory)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print("ARC-R2 PREDICTIVE MCTS BENCHMARK | BEAM: OFF | TEST ANSWERS: UNUSED")
+    print("ARC-R2 QBS-GUIDED PREDICTIVE MCTS | BEAM: OFF | TEST ANSWERS: UNUSED")
     print(f"Exact held-out training pairs: {report['held_out_exact']}/{report['folds']} "
           f"({report['held_out_accuracy']:.3%})")
     print(f"Exact training fits: {report['fit_folds_with_exact_program']}/{report['folds']}")
+    print(f"Mean hybrid seeds: {report['mean_hybrid_seeds']:.2f}; "
+          f"mean hybrid nodes: {report['mean_hybrid_nodes_created']:.2f}")
     print(f"Memory: {report['memory_hits']} hits, {report['memory_saves']} saves")
     print(f"Runtime: {report['runtime_seconds']:.3f}s")
     print(f"[SAVED] {args.output}")
