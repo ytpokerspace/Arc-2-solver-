@@ -5,7 +5,9 @@ the answer against a reference key that is never passed to the generator.
 This protocol does not claim that calibration measures IQ.
 """
 from __future__ import annotations
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Mapping, Sequence, TypeVar
 
 RUBRIC_WEIGHTS = {
@@ -69,6 +71,20 @@ class CalibrationReport:
 
 AnswerGenerator = Callable[[str], GeneratedAnswer]
 AnswerEvaluator = Callable[[CalibrationQuestion, GeneratedAnswer], Evaluation]
+
+def load_question_bank(path: str | Path) -> tuple[CalibrationQuestion, ...]:
+    """Load the public prompt-only bank; reference answers are not stored here."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError("CALIBRATION_BANK_MUST_BE_A_LIST")
+    questions = tuple(CalibrationQuestion(
+        question_id=item["question_id"], domain=item["domain"], prompt=item["prompt"]
+    ) for item in raw)
+    if any(not q.question_id or not q.domain or not q.prompt for q in questions):
+        raise ValueError("CALIBRATION_QUESTION_FIELDS_MUST_BE_NONEMPTY")
+    if len({q.question_id for q in questions}) != len(questions):
+        raise ValueError("DUPLICATE_CALIBRATION_QUESTION_ID")
+    return questions
 
 def weighted_quality(evaluation: Evaluation) -> float:
     return sum(RUBRIC_WEIGHTS[k] * evaluation.rubric[k] for k in RUBRIC_WEIGHTS)
