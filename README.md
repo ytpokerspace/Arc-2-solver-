@@ -1,59 +1,39 @@
 # ARC-2 Solver (ARC-R2)
 
-A transparent, primitive-first ARC research solver. The active benchmark path uses **explicit elementary transformations and deterministic exhaustive enumeration only**. It does not invoke Monte Carlo Tree Search (MCTS), beam search, neural networks, external APIs, or paid services.
+A research prototype containing a deterministic primitive baseline and separate experimental QBS-guided object/grid search. The primitive benchmark remains a deterministic baseline; the integration branch adds predictive MCTS and leave-one-training-pair-out validation as separately reported experiments.
 
 ## Current status
 
-This is a research prototype, not a solved ARC-AGI-2 system. A successful unit test means the primitive or harness behaves as specified; it does not mean an ARC task was solved. Public benchmark results are reported as leave-one-training-pair-out cross-validation, not official hidden-test accuracy.
+This is a research prototype, not a solved ARC-AGI-2 system. Unit tests validate implementation behavior, not benchmark generalization. Public training results are reported as leave-one-training-pair-out validation, not official hidden-test accuracy. Probability estimates from visible training pairs are descriptive fit statistics, not calibrated probabilities of unseen-task success.
 
-## Run the primitive solver
+## Adaptive cognitive calibration preflight
+
+The integration branch adds an Adaptive Cognitive Calibration Layer for QBS:
+
+- Ten long-form question prompts across scientific and technical domains live in research/calibration/questions.json.
+- The generator receives prompt text only; a separate evaluator must hold the reference answers privately.
+- Long-form answer quality is scored on factual correctness (35%), completeness (25%), reasoning (20%), relevance (10%), and consistency (10%).
+- The score starts at 150, changes by +5/-5, is bounded to 0-300, and stops after three consecutive correct answers or ten questions.
+- Confidence calibration is adjusted separately in five-point steps; it is not treated as IQ or proof of increased intelligence.
+- The reference-answer key is intentionally not committed to this public repository.
+
+The API in arc_r2/cognitive_calibration.py provides run_calibrated_session, which runs the preflight before calling the QBS brainstorming callback. A production deployment must keep the answer evaluator and its key isolated from the generator using separate processes or services. The callbacks alone are not a security boundary. The existing offline CLI does not invoke a model or evaluator, so this API must be supplied with those callbacks by the application that hosts QBS.
+
+See research/ADAPTIVE_COGNITIVE_CALIBRATION.md for the protocol and limitations.
+
+## Run tests
 
 Python 3.10+; standard library only.
 
 ```bash
+python -m compileall -q arc_r2 tests
 python -m unittest discover -s tests -v
-python -m arc_r2.primitive_benchmark \
-  --dataset path/to/ARC-AGI-2/data/training \
-  --limit 20 \
-  --max-depth 2 \
-  --candidate-cap 5000 \
-  --output arc_r2_primitive_benchmark.json
 ```
 
-The harness reads each task's training input/output pairs. It holds one training pair out, fits on the remaining pairs, and checks the held-out pair. It does not parse or use task test outputs.
+## Evidence boundaries
 
-## Elementary primitive library
-
-All active primitive implementations are in `arc_r2/primitives.py`.
-
-| Family | Operations |
-|---|---|
-| Grid geometry | rotate 90/180/270, horizontal flip, vertical flip, transpose, anti-diagonal reflection |
-| Colors | recolor, swap two colors, invert dominant foreground/background |
-| Regions | crop to a color, crop non-background content |
-| Size/layout | nearest-neighbor scale, repeat/tile, alternating row/column/checkerboard tile transforms, mask-based pattern stamping, append-prefix repetition |
-| Motion | gravity/compact up, down, left, right |
-| Completion | fill active rows, fill active columns, fill enclosed holes, mirror-complete horizontally/vertically, fill object bounding boxes, keep/recolor largest object using a learned size/shape-to-color rule |
-| Perception | color counts, dominant background, foreground palette, 4-connected and 8-connected object extraction, object size and bounding box |
-| Program model | immutable primitive instructions, deterministic program execution, canonical operation sequence |
-
-The vocabulary is parameterized from colors and dimensions visible in the fit inputs. Programs contain zero, one, or two operations. The harness tests candidates deterministically, removes duplicate behaviors, and selects the shortest exact fit. If no candidate reproduces every fit pair exactly, it abstains; it does not return a partial-fit guess.
-
-## Harness and evidence
-
-- `arc_r2/primitive_benchmark.py`: dataset loader and leave-one-training-pair-out benchmark.
-- `tests/test_primitives.py`: primitive correctness, object extraction, exact-fit and abstention tests.
-- `.github/workflows/tests.yml`: compile and test gate.
-- `.github/workflows/benchmark.yml`: pinned public ARC-AGI-2 training benchmark and JSON artifact.
-
-The benchmark reports exact held-out training-pair accuracy, fit coverage, candidate counts, runtime, and per-fold predictions. A task with fewer than two training examples is skipped because it cannot support leave-one-out evaluation.
-
-## Explicit non-goals for this implementation
-
-- No MCTS.
-- No beam search in the active primitive benchmark.
-- No random exploration or hidden-test fitting.
-- No claims of complete ARC primitive coverage.
-- No claim that the system has solved ARC-AGI-2.
-
-The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
+- Exact output equality remains the acceptance gate for ARC predictions.
+- A held-out training pair must not be visible during candidate generation for its fold.
+- Catalog size, executable operator count, candidate count, and solved-task count are distinct metrics.
+- No official evaluation answers are read by the public-data workflows.
+- Experimental branches with negative held-out results remain research evidence; they are not promoted to the default solver without new validation.
