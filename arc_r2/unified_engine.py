@@ -66,7 +66,10 @@ class UnifiedResult:
     candidate_evidence: tuple[CandidateEvidence, ...]
 
 
-def _trace_for_result(result: UnifiedResult) -> str:
+def _trace_for_result(
+    result: UnifiedResult,
+    terminal_stage: str = "ARC2.TEST_PREDICTION",
+) -> str:
     stages = [
         "ARC2.INPUT",
         "ARC2.DSL",
@@ -75,7 +78,7 @@ def _trace_for_result(result: UnifiedResult) -> str:
     ]
     if result.exact_fit:
         stages.extend(("ARC2.EXACT_FIT", "ARC2.SELECT"))
-        stages.append("ARC2.TEST_PREDICTION")
+        stages.append(terminal_stage)
     else:
         stages.append("ARC2.ABSTAIN")
     return render_trace(stages)
@@ -288,7 +291,7 @@ def run_leave_one_out(dataset: Path, limit: int = 20,
                 "prediction": [list(row) for row in prediction] if prediction is not None else None,
                 "expected": [list(row) for row in held_output],
                 "candidates_evaluated": result.candidates_evaluated,
-                "emoji_trace": _trace_for_result(result),
+                "emoji_trace": _trace_for_result(result, "ARC2.HELDOUT_VALIDATION"),
                 "error": error,
             })
     exact_count = sum(row["held_out_exact"] for row in folds)
