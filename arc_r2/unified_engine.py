@@ -179,11 +179,18 @@ def predict_task(task: dict[str, Any], config: UnifiedConfig | None = None) -> d
     for index, case in enumerate(test_cases):
         # Deliberately access only case["input"]; test output labels are never read.
         test_input = as_grid(case["input"])
-        predicted = result.program.apply(test_input) if result.program is not None else None
+        predicted = None
+        error = None
+        if result.program is not None:
+            try:
+                predicted = result.program.apply(test_input)
+            except (ValueError, TypeError, IndexError) as exc:
+                error = f"{type(exc).__name__}: {exc}"
         predictions.append({
             "test_index": index,
             "input": [list(row) for row in test_input],
             "prediction": [list(row) for row in predicted] if predicted is not None else None,
+            "error": error,
         })
     return {
         "task_id": str(task.get("task_id", "unknown")),
@@ -237,7 +244,13 @@ def run_leave_one_out(dataset: Path, limit: int = 20,
         for held_index, (held_input, held_output) in enumerate(checked):
             fit_pairs = tuple(pair for index, pair in enumerate(checked) if index != held_index)
             result = solve_training_pairs(fit_pairs, config)
-            prediction = result.program.apply(held_input) if result.program is not None else None
+            prediction = None
+            error = None
+            if result.program is not None:
+                try:
+                    prediction = result.program.apply(held_input)
+                except (ValueError, TypeError, IndexError) as exc:
+                    error = f"{type(exc).__name__}: {exc}"
             exact = prediction == held_output if prediction is not None else False
             folds.append({
                 "task_id": task_id,
@@ -250,6 +263,7 @@ def run_leave_one_out(dataset: Path, limit: int = 20,
                 "prediction": [list(row) for row in prediction] if prediction is not None else None,
                 "expected": [list(row) for row in held_output],
                 "candidates_evaluated": result.candidates_evaluated,
+                "error": error,
             })
     exact_count = sum(row["held_out_exact"] for row in folds)
     return {
