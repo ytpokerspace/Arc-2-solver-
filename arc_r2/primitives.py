@@ -14,7 +14,7 @@ from functools import lru_cache
 import hashlib
 import json
 
-from .single_stage_memory import SingleStageMemory
+from .single_stage_memory import SingleStageMemory\nfrom .constraint_engine import check_prediction
 
 Grid = tuple[tuple[int, ...], ...]
 
@@ -712,7 +712,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
                 valid = False
                 break
             outputs.append(predicted)
-            if predicted != target:
+            constraint = check_prediction(predicted, target)
+            constraint_counts[constraint.reason] += 1
+            exact_comparisons += int(constraint.exact_comparison_performed)
+            if not constraint.accepted:
                 valid = False
         evaluated += 1
         if not valid:
