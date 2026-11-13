@@ -45,7 +45,7 @@ An offline, dependency-free research catalog now connects selected foundational 
 
 - `arc_r2/knowledge_base.py`: queryable source/concept/module index.
 - `docs/RESEARCH_NOTES.md`: bibliography, ARC mappings, evidence boundaries, and proposed experiments.
-- `tests/test_knowledge_base.py`: tests for catalog lookup and search.
+- `tests/test_knowledge_base.py`: tests for catalog lookup and search.\n- `arc_r2/constraint_engine.py`: staged necessary-condition checks (shape, palette, color counts, then exact cell equality) used during candidate evaluation.\n- `tests/test_constraint_engine.py`: tests for each constraint stage and exact acceptance.
 
 Example:
 
