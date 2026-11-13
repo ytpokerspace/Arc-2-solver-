@@ -89,3 +89,46 @@ def find_applicable_verified_pattern(memory: ReasoningMemory, examples: tuple, *
         except (KeyError, TypeError, ValueError, IndexError):
             continue
     return None, None
+
+def validate_and_promote_pattern(memory: ReasoningMemory, record: dict, full_result: Any,
+                                 examples: tuple, solver_factory: Any):
+    """Promote a baseline record only when one identical program survives every LOO fold.
+
+    This is within-task validation, not independent-task or official ARC validation.
+    """
+    if len(examples) < 2 or not record or record.get("status") not in {"tested", "implemented"}:
+        return record
+    full_program = full_result.program
+    fold_evidence = []
+    for heldout_index, heldout in enumerate(examples):
+        visible = tuple(item for index, item in enumerate(examples) if index != heldout_index)
+        try:
+            fold_result = solver_factory().solve(visible)
+            same_program = str(fold_result.program) == str(full_program)
+            exact_heldout = fold_result.program.apply(heldout.input) == heldout.output
+        except (ValueError, TypeError, IndexError):
+            return record
+        fold_evidence.append({
+            "heldout_index": heldout_index,
+            "same_program_as_full_fit": same_program,
+            "heldout_exact": exact_heldout,
+        })
+        if not same_program or not exact_heldout:
+            return record
+    promoted = dict(record)
+    promoted["status"] = "validated"
+    outcome = dict(promoted.get("outcome") or {})
+    outcome["validation_scope"] = "leave-one-training-pair-out within-task validation"
+    outcome["validation_folds"] = fold_evidence
+    outcome["validation_exact"] = len(fold_evidence)
+    outcome["validation_total"] = len(fold_evidence)
+    outcome["evidence_scope"] = (
+        "same selected program reproduced on every leave-one-training-pair-out fold; "
+        "not independent-task generalization or official ARC evaluation"
+    )
+    promoted["outcome"] = outcome
+    promoted["evidence"] = list(promoted.get("evidence") or []) + [{
+        "validation_scope": outcome["validation_scope"],
+        "folds": fold_evidence,
+    }]
+    return memory.put(promoted)
