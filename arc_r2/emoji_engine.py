@@ -28,6 +28,7 @@ SYMBOLS = (
     EngineSymbol("⚖️", "ARC2.SELECT", "Choose the simplest exact-fit candidate found"),
     EngineSymbol("🛑", "ARC2.ABSTAIN", "Decline to predict when no exact-fit program is found"),
     EngineSymbol("📤", "ARC2.TEST_PREDICTION", "Apply selected program to test input grids"),
+    EngineSymbol("🧪", "ARC2.HELDOUT_VALIDATION", "Score a held-out training pair without fitting on it"),
     EngineSymbol("📊", "ARC2.TELEMETRY", "Record counts, runtime, and validation evidence"),
 )
 
