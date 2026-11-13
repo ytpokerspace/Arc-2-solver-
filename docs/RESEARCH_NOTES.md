@@ -51,7 +51,7 @@ Existing relevant modules:
 
 Publisher and author pages establish bibliographic details and topic relevance; they do not establish that a free full-text copy is available. This repository stores citations and original engineering notes, not copied book chapters. Check each book's institutional access and license before obtaining or redistributing it. The VSA repository is linked as an external implementation, not copied into this project.
 
-## Evidence status
+## Constraint-based candidate elimination (implemented)\n\nThe active exact-fit search now checks each predicted output in stages: (1) grid dimensions, (2) color palette, (3) per-color cell counts, and (4) exact cell positions. A candidate is accepted only if every training pair passes exact grid equality. A mismatch at an earlier stage rejects the candidate without performing later comparisons. This is a conservative necessary-condition cascade; it does not change the candidate vocabulary or search order. Benchmark JSON reports rejection counts and exact-comparison counts.\n\nThis is not a general-purpose CSP/SAT solver and does not claim to implement the full algorithms in Dechter or Tsang. It is a small, deterministic constraint-checking layer aligned with the active primitive solver.\n\n## Evidence status
 
 - This catalog is metadata and a research-to-code mapping.
 - It does not claim to have imported book text into the solver.
