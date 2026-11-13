@@ -8,6 +8,9 @@ on:
       - "arc_r2/predictive_mcts_benchmark.py"
       - "arc_r2/primitive_benchmark.py"
       - "arc_r2/validation.py"
+      - "arc_r2/unified_engine.py"
+      - "arc_r2/emoji_engine.py"
+      - "tests/test_unified_engine.py"
       - ".github/workflows/benchmark.yml"
   pull_request:
     paths:
@@ -15,6 +18,9 @@ on:
       - "arc_r2/primitive_benchmark.py"
       - "arc_r2/validation.py"
       - "tests/test_validation.py"
+      - "arc_r2/unified_engine.py"
+      - "arc_r2/emoji_engine.py"
+      - "tests/test_unified_engine.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
