@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from collections import Counter
 from typing import Iterable
 
-Grid = tuple[tuple[int, ...], ...]\n\ndef dimensions(grid: Grid) -> tuple[int, int]:\n    return len(grid), len(grid[0])
+Grid = tuple[tuple[int, ...], ...]
+
+def dimensions(grid: Grid) -> tuple[int, int]:
+    return len(grid), len(grid[0])
 
 
 @dataclass(frozen=True)
