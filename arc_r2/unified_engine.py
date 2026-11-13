@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 from .primitives import Program, as_grid, fit_program
 from .predictive_mcts import search as predictive_mcts_search
+from .emoji_engine import render_trace
 
 Grid = tuple[tuple[int, ...], ...]
 Example = tuple[Grid, Grid]
@@ -63,6 +64,21 @@ class UnifiedResult:
     mcts_nodes_created: int
     mcts_iterations: int
     candidate_evidence: tuple[CandidateEvidence, ...]
+
+
+def _trace_for_result(result: UnifiedResult) -> str:
+    stages = [
+        "ARC2.INPUT",
+        "ARC2.DSL",
+        "ARC2.PRIMITIVE_ENUMERATION",
+        "ARC2.PREDICTIVE_MCTS",
+    ]
+    if result.exact_fit:
+        stages.extend(("ARC2.EXACT_FIT", "ARC2.SELECT"))
+        stages.append("ARC2.TEST_PREDICTION")
+    else:
+        stages.append("ARC2.ABSTAIN")
+    return render_trace(stages)
 
 
 def _program_key(program: Program) -> tuple:
@@ -210,6 +226,7 @@ def predict_task(task: dict[str, Any], config: UnifiedConfig | None = None) -> d
         "primitive_candidates": result.primitive_candidates,
         "mcts_nodes_created": result.mcts_nodes_created,
         "mcts_iterations": result.mcts_iterations,
+        "emoji_trace": _trace_for_result(result),
         "test_predictions": predictions,
     }
 
@@ -271,6 +288,7 @@ def run_leave_one_out(dataset: Path, limit: int = 20,
                 "prediction": [list(row) for row in prediction] if prediction is not None else None,
                 "expected": [list(row) for row in held_output],
                 "candidates_evaluated": result.candidates_evaluated,
+                "emoji_trace": _trace_for_result(result),
                 "error": error,
             })
     exact_count = sum(row["held_out_exact"] for row in folds)
