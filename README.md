@@ -1,33 +1,24 @@
 # ARC-2 Solver (ARC-R2)
 
-A research prototype containing a deterministic primitive baseline and separate experimental QBS-guided object/grid search. The primitive benchmark remains a deterministic baseline; the integration branch adds predictive MCTS and leave-one-training-pair-out validation as separately reported experiments.
+A research solver scoped to **ARC-AGI-2 static grid-transformation tasks**. The unified path combines deterministic primitive enumeration with bounded predictive MCTS over the shared grid/program representation. It is not an interactive game agent and does not implement ARC-AGI-3 action loops.
 
-## Current status
+## What the task data means
 
-This is a research prototype, not a solved ARC-AGI-2 system. Unit tests validate implementation behavior, not benchmark generalization. Public training results are reported as leave-one-training-pair-out validation, not official hidden-test accuracy. Probability estimates from visible training pairs are descriptive fit statistics, not calibrated probabilities of unseen-task success.
+- **Training pairs** (`train`): known input grids and their correct output grids. The solver infers a transformation from these pairs.
+- **Test questions** (`test`): unseen input grids. The solver applies the inferred transformation to each test input and emits a predicted output grid.
+- **Hidden test outputs**: never read by the prediction path and never used for candidate generation or selection.
 
-## Adaptive cognitive calibration preflight
+A program is accepted only when it exactly reproduces every training pair supplied to the fit. If no exact-fit program is found within the configured search budgets, the solver abstains instead of returning a partial-fit guess.
 
-The integration branch adds an Adaptive Cognitive Calibration Layer for QBS:
+## Unified engine
 
-- Ten long-form question prompts across scientific and technical domains live in research/calibration/questions.json.
-- The generator receives prompt text only; a separate evaluator must hold the reference answers privately.
-- Long-form answer quality is scored on factual correctness (35%), completeness (25%), reasoning (20%), relevance (10%), and consistency (10%).
-- The score starts at 150, changes by +5/-5, is bounded to 0-300, and stops after three consecutive correct answers or ten questions.
-- Confidence calibration is adjusted separately in five-point steps; it is not treated as IQ or proof of increased intelligence.
-- The reference-answer key is intentionally not committed to this public repository.
+- `arc_r2/unified_engine.py`: coordinates the deterministic primitive and predictive-MCTS search paths; deduplicates exact-fit candidates; selects the simplest candidate found; predicts test inputs; and runs leave-one-training-pair-out validation.
+- `arc_r2/primitives.py`: grid operations, object extraction, deterministic program execution, and bounded primitive enumeration.
+- `arc_r2/predictive_mcts.py`: bounded predictive pair-matching MCTS.
+- `arc_r2/emoji_engine.py`: maps human-readable emoji labels to stable canonical ARC-2 stage IDs. Emojis are trace labels, not executable commands.
+- `docs/ARC2_UNIFIED_ENGINE.md`: architecture, commands, and evaluation boundaries.
 
-The API in arc_r2/cognitive_calibration.py provides run_calibrated_session, which runs the preflight before calling the QBS brainstorming callback. A production deployment must keep the answer evaluator and its key isolated from the generator using separate processes or services. The callbacks alone are not a security boundary. The existing offline CLI does not invoke a model or evaluator, so this API must be supplied with those callbacks by the application that hosts QBS.
-
-See research/ADAPTIVE_COGNITIVE_CALIBRATION.md for the protocol and limitations.
-
-## Automatic reasoning-memory capture
-
-The local CLI now wraps each baseline or object-engine solve with the structured reasoning recorder. It writes a persistent `reasoning_memory.json` beside the run log under the selected `--output` directory. Records are keyed by engine, task label, and a fingerprint of the training pairs, so repeating the same task updates its record rather than duplicating it.
-
-Each run records the training fit and explicitly labels its evidence scope. A perfect fit on visible training pairs is marked `tested`, not `validated`. The baseline runner now considers only records marked `validated`. It parses a stored baseline DSL program and re-applies it to every current training pair; reuse occurs only if every output matches exactly. Unvalidated records, malformed programs, object-engine records, and imperfect fits are ignored. A reused program is reported in the JSONL run log with zero search candidates. This is a conservative exact-fit reuse gate, not evidence of broader ARC generalization. This keeps the solver's behavior unchanged while the memory pipeline is tested.
-
-The memory file is runtime output and should be kept with the experiment artifacts, not committed as source code.
+The selected program is the simplest exact-fit candidate found by the configured searches. This is not a proof of global optimality or hidden-test correctness. Search scores are not calibrated probabilities.
 
 ## Run tests
 
@@ -38,10 +29,40 @@ python -m compileall -q arc_r2 tests
 python -m unittest discover -s tests -v
 ```
 
+## Predict test inputs
+
+Fit on all visible training pairs and emit predictions for test inputs:
+
+```bash
+python -m arc_r2.unified_engine \
+  --mode predict \
+  --dataset path/to/ARC-AGI-2/data/evaluation \
+  --limit 20 \
+  --output arc2_predictions.json
+```
+
+The prediction runner reads each test case's `input` field only. It does not compare against or serialize a test answer.
+
+## Validate using training pairs
+
+Run leave-one-training-pair-out validation on public training tasks:
+
+```bash
+python -m arc_r2.unified_engine \
+  --mode validate \
+  --dataset path/to/ARC-AGI-2/data/training \
+  --limit 20 \
+  --output arc2_unified_validation.json
+```
+
+For each fold, one training pair is hidden from synthesis, the remaining pairs are used to infer a program, and the program is applied to the held-out input. The known held-out output is used only to score that validation fold. This measures within-task rule consistency; it is not official hidden-test accuracy or independent-task generalization.
+
+Search budgets can be set with `--primitive-candidate-cap`, `--primitive-max-depth`, `--mcts-iterations`, `--mcts-branch-width`, and `--mcts-max-depth`. Optional persistent memory is split by engine using `--memory-dir`.
+
 ## Evidence boundaries
 
-- Exact output equality remains the acceptance gate for ARC predictions.
-- A held-out training pair must not be visible during candidate generation for its fold.
-- Catalog size, executable operator count, candidate count, and solved-task count are distinct metrics.
-- No official evaluation answers are read by the public-data workflows.
-- Experimental branches with negative held-out results remain research evidence; they are not promoted to the default solver without new validation.
+- Unit tests establish software behavior, not benchmark accuracy.
+- Exact fit on training pairs is necessary, not sufficient, for a correct test prediction.
+- Catalog size, executable operator count, candidate count, and solved-task count are different measurements.
+- Public training-pair validation, test-input predictions, and official evaluation results must be reported separately.
+- No claim is made that this prototype solves ARC-AGI-2.
