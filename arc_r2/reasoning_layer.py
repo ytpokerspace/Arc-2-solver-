@@ -62,3 +62,30 @@ def solve_and_remember(
         "outcome": outcome,
     })
     return result, record
+
+def find_applicable_verified_pattern(memory: ReasoningMemory, examples: tuple, *, tags=()):
+    """Return a validated baseline program only when it exactly fits every current example.
+
+    This is deliberately conservative: unvalidated records, object-engine records,
+    parse failures, and any imperfect fit are ignored.
+    """
+    from types import SimpleNamespace
+    from .dsl import parse_program
+
+    for record in memory.verified_patterns(tags):
+        try:
+            program = parse_program(str((record.get("outcome") or {}).get("program", "")))
+            if not examples or not all(program.apply(example.input) == example.output
+                                       for example in examples):
+                continue
+            return SimpleNamespace(
+                program=program,
+                score=1.0,
+                exact_examples=len(examples),
+                total_examples=len(examples),
+                candidates_evaluated=0,
+                reused_memory_record=record["id"],
+            ), record
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+    return None, None
