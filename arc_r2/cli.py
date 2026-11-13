@@ -89,7 +89,6 @@ def main(argv=None):
                 assumptions=["only supplied training pairs are available to the solver"],
                 unknowns=["generalization to hidden test outputs"],
                 representations=["integer grid", "solver program"],
-                hypotheses=[str(result_program) for result_program in []],
                 tags=["arc2", args.engine, "automatic-run"],
             )
             apply_program = result.program.apply
