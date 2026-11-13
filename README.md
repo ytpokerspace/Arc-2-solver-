@@ -25,7 +25,7 @@ See research/ADAPTIVE_COGNITIVE_CALIBRATION.md for the protocol and limitations.
 
 The local CLI now wraps each baseline or object-engine solve with the structured reasoning recorder. It writes a persistent `reasoning_memory.json` beside the run log under the selected `--output` directory. Records are keyed by engine, task label, and a fingerprint of the training pairs, so repeating the same task updates its record rather than duplicating it.
 
-Each run records the training fit and explicitly labels its evidence scope. A perfect fit on visible training pairs is marked `tested`, not `validated`. The runner also counts matching validated patterns for reporting, but does not yet inject those patterns into candidate generation or alter predictions. This keeps the solver's behavior unchanged while the memory pipeline is tested.
+Each run records the training fit and explicitly labels its evidence scope. A perfect fit on visible training pairs is marked `tested`, not `validated`. The baseline runner now considers only records marked `validated`. It parses a stored baseline DSL program and re-applies it to every current training pair; reuse occurs only if every output matches exactly. Unvalidated records, malformed programs, object-engine records, and imperfect fits are ignored. A reused program is reported in the JSONL run log with zero search candidates. This is a conservative exact-fit reuse gate, not evidence of broader ARC generalization. This keeps the solver's behavior unchanged while the memory pipeline is tested.
 
 The memory file is runtime output and should be kept with the experiment artifacts, not committed as source code.
 
