@@ -130,12 +130,16 @@ def solve_training_pairs(
 
     winner = min(unique.values(), key=lambda item: _program_key(item.program))
     # Final independent exact-fit gate before the selected program can escape.
-    exact = all(winner.program.apply(source) == target for source, target in pairs)
+    try:
+        exact = all(winner.program.apply(source) == target for source, target in pairs)
+    except (ValueError, TypeError, IndexError):
+        exact = False
     if not exact:
         return UnifiedResult(
             None, False, None, len(pairs),
-            primitive_result.candidates_evaluated + mcts_result.nodes_created,
-            primitive_result.candidates_evaluated, mcts_result.nodes_created, (),
+            primitive_result.candidates_evaluated + mcts_result.iterations,
+            primitive_result.candidates_evaluated, mcts_result.nodes_created,
+            mcts_result.iterations, (),
         )
     return UnifiedResult(
         winner.program, True, winner.source, len(pairs),
