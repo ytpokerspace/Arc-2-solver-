@@ -9,7 +9,7 @@ from .grid import as_grid, to_lists
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 from .object_solver import ObjectExample, ObjectHybridSolver
-from .reasoning_layer import solve_and_remember
+from .reasoning_layer import solve_and_remember, find_applicable_verified_pattern
 from .reasoning_memory import ReasoningMemory, canonical_fingerprint
 
 
@@ -80,17 +80,23 @@ def main(argv=None):
                           for example in examples],
             })
             task_label = re.sub(r"[^A-Za-z0-9_-]+", "-", str(task.get("task_id") or f"task-{index}"))[:40]
-            result, memory_record = solve_and_remember(
-                solver, examples, memory,
-                record_id=f"{args.engine}-{task_label}-{training_signature[:16]}",
-                title=f"ARC-R2 {args.engine} training run",
-                intent="Find a program that exactly maps the supplied ARC training grids",
-                requirements=["preserve grid dimensions and colors", "prefer exact output equality"],
-                assumptions=["only supplied training pairs are available to the solver"],
-                unknowns=["generalization to hidden test outputs"],
-                representations=["integer grid", "solver program"],
-                tags=["arc2", args.engine, "automatic-run"],
-            )
+            result, memory_record = (None, None)
+            if args.engine == "baseline":
+                result, memory_record = find_applicable_verified_pattern(
+                    memory, examples, tags=["arc2", "baseline"]
+                )
+            if result is None:
+                result, memory_record = solve_and_remember(
+                    solver, examples, memory,
+                    record_id=f"{args.engine}-{task_label}-{training_signature[:16]}",
+                    title=f"ARC-R2 {args.engine} training run",
+                    intent="Find a program that exactly maps the supplied ARC training grids",
+                    requirements=["preserve grid dimensions and colors", "prefer exact output equality"],
+                    assumptions=["only supplied training pairs are available to the solver"],
+                    unknowns=["generalization to hidden test outputs"],
+                    representations=["integer grid", "solver program"],
+                    tags=["arc2", args.engine, "automatic-run"],
+                )
             apply_program = result.program.apply
             predictions = [to_lists(apply_program(as_grid(case["input"])))
                            for case in task.get("test", [])]
@@ -101,11 +107,13 @@ def main(argv=None):
                     "score": round(result.score, 6), "candidates": result.candidates_evaluated,
                     "test_predictions": predictions,
                     "reasoning_memory_status": memory_record["status"],
-                    "verified_patterns_available": len(verified_patterns)}
+                    "verified_patterns_available": len(verified_patterns),
+                    "reused_verified_pattern": getattr(result, "reused_memory_record", None)}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
                   f"program={result.program}; candidates={result.candidates_evaluated}; "
-                  f"memory={memory_record['status']}; verified_patterns={len(verified_patterns)}")
+                  f"memory={memory_record['status']}; verified_patterns={len(verified_patterns)}; "
+                  f"reused={getattr(result, 'reused_memory_record', 'no')}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:
