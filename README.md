@@ -39,6 +39,25 @@ All active primitive implementations are in `arc_r2/primitives.py`.
 
 The vocabulary is parameterized from colors and dimensions visible in the fit inputs. Programs contain zero, one, or two operations. The harness tests candidates deterministically, removes duplicate behaviors, and selects the shortest exact fit. If no candidate reproduces every fit pair exactly, it abstains; it does not return a partial-fit guess.
 
+## Research knowledge map
+
+An offline, dependency-free research catalog now connects selected foundational references to the solver's existing modules:
+
+- `arc_r2/knowledge_base.py`: queryable source/concept/module index.
+- `docs/RESEARCH_NOTES.md`: bibliography, ARC mappings, evidence boundaries, and proposed experiments.
+- `tests/test_knowledge_base.py`: tests for catalog lookup and search.
+
+Example:
+
+```python
+from arc_r2.knowledge_base import search_knowledge
+
+for item in search_knowledge("graph matching"):
+    print(item.source_title, item.arc_use, item.existing_modules)
+```
+
+The catalog is a research index, not a new solver engine. It does not copy book text, claim that full books were read, or add a CSP solver, morphology engine, graph matcher, or VSA dependency. See [Research Notes](docs/RESEARCH_NOTES.md) for source links and status.
+
 ## Harness and evidence
 
 - `arc_r2/primitive_benchmark.py`: dataset loader and leave-one-training-pair-out benchmark.
@@ -50,10 +69,11 @@ The benchmark reports exact held-out training-pair accuracy, fit coverage, candi
 
 ## Explicit non-goals for this implementation
 
-- No MCTS.
+- No MCTS in the active primitive benchmark.
 - No beam search in the active primitive benchmark.
 - No random exploration or hidden-test fitting.
 - No claims of complete ARC primitive coverage.
 - No claim that the system has solved ARC-AGI-2.
+- No benchmark score is inferred from unit tests or from the research catalog.
 
 The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
