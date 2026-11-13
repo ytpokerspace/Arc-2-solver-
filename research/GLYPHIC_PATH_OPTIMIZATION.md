@@ -63,3 +63,13 @@ python -m unittest discover -s tests -v
 ```
 
 Measure storage bytes, retrieval latency, reconstruction integrity, and matched-budget held-out ARC performance before considering default integration.
+
+## Reproducible microbenchmark
+
+Run from the repository root:
+
+```bash
+python -m benchmarks.benchmark_glyphic_path_memory --paths 250 --queries 100
+```
+
+The JSON report measures path write time/throughput, serialized bytes and bytes per path, tag-retrieval mean and median latency, hydration latency, and exact evidence reconstruction rate. CI runs a small smoke workload (25 paths, 10 queries) after compilation and unit tests. The smoke test checks that the benchmark executes; it is not a performance threshold and does not measure ARC solving accuracy. For a useful comparison, run the same workload on the same machine against the baseline memory implementation and retain the JSON reports.
