@@ -45,3 +45,7 @@ python -m unittest discover -s tests -v
 - Catalog size, executable operator count, candidate count, and solved-task count are distinct metrics.
 - No official evaluation answers are read by the public-data workflows.
 - Experimental branches with negative held-out results remain research evidence; they are not promoted to the default solver without new validation.
+
+## Glyphic Path Optimization (experimental)
+
+The `arc_r2.glyphic_path_memory` module stores reasoning as connected semantic event paths (for example, `🔍 → 🟦 → 🔗 → 🔄 → 🎯`). Glyphs are indexes into typed events, not replacements for original grids or evidence. The prototype provides a versioned codebook, persistent paths, tag-based retrieval, SHA-256-checked evidence hydration, and verified-path hybridization. Hybrid outputs are always marked as hypotheses and require independent exact validation. This first stage is deliberately separate from MCTS candidate generation and does not change default solver behavior or claim a benchmark gain. See `research/GLYPHIC_PATH_OPTIMIZATION.md`.
