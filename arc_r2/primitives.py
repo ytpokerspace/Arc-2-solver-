@@ -15,6 +15,7 @@ import hashlib
 import json
 
 from .single_stage_memory import SingleStageMemory
+from .constraint_engine import check_prediction
 
 Grid = tuple[tuple[int, ...], ...]
 
@@ -647,6 +648,8 @@ class FitResult:
     fit_program_count: int
     memory_hit: bool = False
     memory_saved: bool = False
+    constraint_rejections: dict[str, int] | None = None
+    exact_comparisons: int = 0
 
 
 def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 5000,
@@ -694,6 +697,9 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
     best: Program | None = None
     fits = 0
     evaluated = 0
+    constraint_counts = {"shape": 0, "palette": 0, "color_counts": 0,
+                         "cell_positions": 0, "exact_match": 0}
+    exact_comparisons = 0
     behavior_seen = set()
     memory_saved = False
     for program in candidate_programs():
@@ -712,7 +718,10 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
                 valid = False
                 break
             outputs.append(predicted)
-            if predicted != target:
+            constraint = check_prediction(predicted, target)
+            constraint_counts[constraint.reason] += 1
+            exact_comparisons += int(constraint.exact_comparison_performed)
+            if not constraint.accepted:
                 valid = False
         evaluated += 1
         if not valid:
@@ -730,4 +739,6 @@ def fit_program(examples: tuple[tuple[Grid, Grid], ...], candidate_cap: int = 50
         memory.save(fingerprint, tuple((op.name, op.args) for op in best.operations))
         memory_saved = True
     return FitResult(best, evaluated, best is not None, fits,
-                     memory_hit=cached_program is not None, memory_saved=memory_saved)
+                     memory_hit=cached_program is not None, memory_saved=memory_saved,
+                     constraint_rejections={key: value for key, value in constraint_counts.items() if key != "exact_match"},
+                     exact_comparisons=exact_comparisons)

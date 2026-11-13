@@ -65,6 +65,8 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
                 "fit_exact": result.exact_fit,
                 "fit_program_count": result.fit_program_count,
                 "candidates_evaluated": result.candidates_evaluated,
+                "constraint_rejections": result.constraint_rejections or {},
+                "exact_comparisons": result.exact_comparisons,
                 "single_stage_memory_hit": result.memory_hit,
                 "single_stage_memory_saved": result.memory_saved,
                 "held_out_exact": exact,
@@ -87,6 +89,9 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
         "folds": len(folds),
         "fit_folds_with_exact_program": fit,
         "held_out_exact": exact,
+        "constraint_rejections": {key: sum(row["constraint_rejections"].get(key, 0) for row in folds)
+                                  for key in ("shape", "palette", "color_counts", "cell_positions")},
+        "exact_comparisons": sum(row["exact_comparisons"] for row in folds),
         "held_out_accuracy": exact / len(folds) if folds else 0.0,
         "candidate_cap_per_fold": candidate_cap,
         "single_stage_memory_path": str(memory_path) if memory_path else None,
@@ -116,7 +121,8 @@ def main(argv=None) -> int:
     if not 1 <= args.candidate_cap <= 50000:
         parser.error("candidate-cap must be in 1..50000")
     report = run_benchmark(args.dataset, args.limit, args.candidate_cap, args.max_depth, args.memory)
-    args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    args.output.write_text(json.dumps(report, indent=2) + "
+", encoding="utf-8")
     print("ARC-R2 PRIMITIVE BENCHMARK | MCTS: OFF | BEAM: OFF | TEST ANSWERS: UNUSED")
     print(f"Tasks: {report['eligible_tasks']}/{report['tasks_considered']} eligible")
     print(f"Exact held-out training pairs: {report['held_out_exact']}/{report['folds']} "
