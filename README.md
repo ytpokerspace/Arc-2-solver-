@@ -1,59 +1,68 @@
 # ARC-2 Solver (ARC-R2)
 
-A transparent, primitive-first ARC research solver. The active benchmark path uses **explicit elementary transformations and deterministic exhaustive enumeration only**. It does not invoke Monte Carlo Tree Search (MCTS), beam search, neural networks, external APIs, or paid services.
+A research solver scoped to **ARC-AGI-2 static grid-transformation tasks**. The unified path combines deterministic primitive enumeration with bounded predictive MCTS over the shared grid/program representation. It is not an interactive game agent and does not implement ARC-AGI-3 action loops.
 
-## Current status
+## What the task data means
 
-This is a research prototype, not a solved ARC-AGI-2 system. A successful unit test means the primitive or harness behaves as specified; it does not mean an ARC task was solved. Public benchmark results are reported as leave-one-training-pair-out cross-validation, not official hidden-test accuracy.
+- **Training pairs** (`train`): known input grids and their correct output grids. The solver infers a transformation from these pairs.
+- **Test questions** (`test`): unseen input grids. The solver applies the inferred transformation to each test input and emits a predicted output grid.
+- **Hidden test outputs**: never read by the prediction path and never used for candidate generation or selection.
 
-## Run the primitive solver
+A program is accepted only when it exactly reproduces every training pair supplied to the fit. If no exact-fit program is found within the configured search budgets, the solver abstains instead of returning a partial-fit guess.
+
+## Unified engine
+
+- `arc_r2/unified_engine.py`: coordinates the deterministic primitive and predictive-MCTS search paths; deduplicates exact-fit candidates; selects the simplest candidate found; predicts test inputs; and runs leave-one-training-pair-out validation.
+- `arc_r2/primitives.py`: grid operations, object extraction, deterministic program execution, and bounded primitive enumeration.
+- `arc_r2/predictive_mcts.py`: bounded predictive pair-matching MCTS.
+- `arc_r2/emoji_engine.py`: maps human-readable emoji labels to stable canonical ARC-2 stage IDs. Emojis are trace labels, not executable commands.
+- `docs/ARC2_UNIFIED_ENGINE.md`: architecture, commands, and evaluation boundaries.
+
+The selected program is the simplest exact-fit candidate found by the configured searches. This is not a proof of global optimality or hidden-test correctness. Search scores are not calibrated probabilities.
+
+## Run tests
 
 Python 3.10+; standard library only.
 
 ```bash
+python -m compileall -q arc_r2 tests
 python -m unittest discover -s tests -v
-python -m arc_r2.primitive_benchmark \
-  --dataset path/to/ARC-AGI-2/data/training \
-  --limit 20 \
-  --max-depth 2 \
-  --candidate-cap 5000 \
-  --output arc_r2_primitive_benchmark.json
 ```
 
-The harness reads each task's training input/output pairs. It holds one training pair out, fits on the remaining pairs, and checks the held-out pair. It does not parse or use task test outputs.
+## Predict test inputs
 
-## Elementary primitive library
+Fit on all visible training pairs and emit predictions for test inputs:
 
-All active primitive implementations are in `arc_r2/primitives.py`.
+```bash
+python -m arc_r2.unified_engine \
+  --mode predict \
+  --dataset path/to/ARC-AGI-2/data/evaluation \
+  --limit 20 \
+  --output arc2_predictions.json
+```
 
-| Family | Operations |
-|---|---|
-| Grid geometry | rotate 90/180/270, horizontal flip, vertical flip, transpose, anti-diagonal reflection |
-| Colors | recolor, swap two colors, invert dominant foreground/background |
-| Regions | crop to a color, crop non-background content |
-| Size/layout | nearest-neighbor scale, repeat/tile, alternating row/column/checkerboard tile transforms, mask-based pattern stamping, append-prefix repetition |
-| Motion | gravity/compact up, down, left, right |
-| Completion | fill active rows, fill active columns, fill enclosed holes, mirror-complete horizontally/vertically, fill object bounding boxes, keep/recolor largest object using a learned size/shape-to-color rule |
-| Perception | color counts, dominant background, foreground palette, 4-connected and 8-connected object extraction, object size and bounding box |
-| Program model | immutable primitive instructions, deterministic program execution, canonical operation sequence |
+The prediction runner reads each test case's `input` field only. It does not compare against or serialize a test answer.
 
-The vocabulary is parameterized from colors and dimensions visible in the fit inputs. Programs contain zero, one, or two operations. The harness tests candidates deterministically, removes duplicate behaviors, and selects the shortest exact fit. If no candidate reproduces every fit pair exactly, it abstains; it does not return a partial-fit guess.
+## Validate using training pairs
 
-## Harness and evidence
+Run leave-one-training-pair-out validation on public training tasks:
 
-- `arc_r2/primitive_benchmark.py`: dataset loader and leave-one-training-pair-out benchmark.
-- `tests/test_primitives.py`: primitive correctness, object extraction, exact-fit and abstention tests.
-- `.github/workflows/tests.yml`: compile and test gate.
-- `.github/workflows/benchmark.yml`: pinned public ARC-AGI-2 training benchmark and JSON artifact.
+```bash
+python -m arc_r2.unified_engine \
+  --mode validate \
+  --dataset path/to/ARC-AGI-2/data/training \
+  --limit 20 \
+  --output arc2_unified_validation.json
+```
 
-The benchmark reports exact held-out training-pair accuracy, fit coverage, candidate counts, runtime, and per-fold predictions. A task with fewer than two training examples is skipped because it cannot support leave-one-out evaluation.
+For each fold, one training pair is hidden from synthesis, the remaining pairs are used to infer a program, and the program is applied to the held-out input. The known held-out output is used only to score that validation fold. This measures within-task rule consistency; it is not official hidden-test accuracy or independent-task generalization.
 
-## Explicit non-goals for this implementation
+Search budgets can be set with `--primitive-candidate-cap`, `--primitive-max-depth`, `--mcts-iterations`, `--mcts-branch-width`, and `--mcts-max-depth`. Optional persistent memory is split by engine using `--memory-dir`.
 
-- No MCTS.
-- No beam search in the active primitive benchmark.
-- No random exploration or hidden-test fitting.
-- No claims of complete ARC primitive coverage.
-- No claim that the system has solved ARC-AGI-2.
+## Evidence boundaries
 
-The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
+- Unit tests establish software behavior, not benchmark accuracy.
+- Exact fit on training pairs is necessary, not sufficient, for a correct test prediction.
+- Catalog size, executable operator count, candidate count, and solved-task count are different measurements.
+- Public training-pair validation, test-input predictions, and official evaluation results must be reported separately.
+- No claim is made that this prototype solves ARC-AGI-2.

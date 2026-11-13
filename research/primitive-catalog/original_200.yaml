@@ -1,0 +1,292 @@
+catalog_id: arc2-original-200
+catalog_name: Original ARC-AGI-2 Grid DSL Primitive Catalog
+version: 1
+status: cataloged_pending_implementation_audit
+authority: user_supplied_original_catalog
+expected_unique_primitive_count: 200
+actual_unique_primitive_count: 200
+notes:
+  - This file records the original two 100-item collections.
+  - The core collection is not duplicated in this catalog.
+  - Names are preserved as supplied; signatures and implementations require separate validation.
+  - Catalog membership does not imply that a primitive is implemented or benchmark-validated.
+  - Later experimental additions must be stored separately and must not silently alter this catalog.
+groups:
+  geometry:
+    count: 12
+    primitives:
+      - rot90
+      - rot180
+      - rot270
+      - flip_h
+      - flip_v
+      - transpose
+      - anti_transpose
+      - shift
+      - wrap_shift
+      - scale_up
+      - scale_down
+      - shear
+  crop_and_compose:
+    count: 14
+    primitives:
+      - crop_bbox
+      - crop_object
+      - trim_border
+      - pad
+      - tile
+      - mirror_tile
+      - concat_h
+      - concat_v
+      - overlay
+      - underlay
+      - split_h
+      - split_v
+      - quadrants
+      - resize_to
+  color:
+    count: 12
+    primitives:
+      - recolor
+      - swap_colors
+      - replace_color
+      - most_common_color
+      - least_common_color
+      - color_by_size
+      - color_by_count
+      - color_by_position
+      - invert
+      - keep_color
+      - remove_color
+      - map_palette
+  objects:
+    count: 16
+    primitives:
+      - find_objects
+      - find_objects_diag
+      - find_by_color
+      - largest
+      - smallest
+      - tallest
+      - widest
+      - topmost
+      - leftmost
+      - filter_by_shape
+      - filter_by_size
+      - filter_by_color
+      - outline
+      - hollow
+      - fill_holes
+      - bounding_box
+  object_moves:
+    count: 10
+    primitives:
+      - move_object
+      - move_until_wall
+      - move_until_hit
+      - gravity_down
+      - gravity_toward
+      - align_to
+      - center_in
+      - copy_object
+      - stamp
+      - delete_object
+  lines_and_fill:
+    count: 12
+    primitives:
+      - draw_line
+      - extend_ray
+      - connect_pair
+      - flood_fill
+      - fill_enclosed
+      - border
+      - grid_lines
+      - diagonal_ray
+      - bounce_path
+      - fill_row
+      - fill_column
+      - concentric_rings
+  symmetry_and_patterns:
+    count: 10
+    primitives:
+      - make_symmetric_h
+      - make_symmetric_v
+      - make_symmetric_4way
+      - detect_period
+      - repeat_pattern
+      - complete_pattern
+      - find_odd_one_out
+      - denoise
+      - extrapolate_sequence
+      - mirror_object
+  counting_and_logic:
+    count: 8
+    primitives:
+      - count_objects
+      - count_color
+      - compare_size
+      - majority_vote
+      - and_grids
+      - or_grids
+      - xor_grids
+      - mask
+  control_flow:
+    count: 6
+    primitives:
+      - if_then_else
+      - for_each_object
+      - compose
+      - apply_until_stable
+      - try_each
+      - repeat_n
+  advanced_geometry:
+    count: 10
+    primitives:
+      - rotate_object
+      - flip_object
+      - scale_object
+      - skew_object
+      - rotate_about_point
+      - reflect_across_line
+      - polar_unwrap
+      - spiral_walk
+      - zigzag_scan
+      - diagonal_scan
+  object_relations:
+    count: 14
+    primitives:
+      - touching
+      - contains
+      - inside
+      - above
+      - below
+      - left_of
+      - right_of
+      - aligned_h
+      - aligned_v
+      - same_shape
+      - same_size
+      - nearest_to
+      - farthest_from
+      - overlapping
+  object_properties:
+    count: 12
+    primitives:
+      - get_color
+      - get_size
+      - get_height
+      - get_width
+      - get_center
+      - get_corners
+      - get_holes_count
+      - get_shape_hash
+      - get_symmetry_type
+      - get_touching_border
+      - get_density
+      - get_orientation
+  grouping_and_sorting:
+    count: 10
+    primitives:
+      - group_by_color
+      - group_by_shape
+      - group_by_size
+      - sort_by_size
+      - sort_by_position
+      - sort_by_color_count
+      - rank_objects
+      - pair_up
+      - partition_by_line
+      - cluster_nearby
+  cell_level_operations:
+    count: 10
+    primitives:
+      - neighbors_4
+      - neighbors_8
+      - count_neighbors
+      - cellular_step
+      - erode
+      - dilate
+      - skeletonize
+      - convex_hull
+      - edge_detect
+      - corner_detect
+  path_and_graph:
+    count: 10
+    primitives:
+      - shortest_path
+      - connect_all
+      - spanning_tree
+      - trace_boundary
+      - follow_color_path
+      - maze_solve
+      - bridge_gap
+      - extend_until_blocked
+      - branch_from_point
+      - loop_detect
+  grid_as_data:
+    count: 10
+    primitives:
+      - read_row_as_sequence
+      - read_column_as_sequence
+      - grid_to_cells
+      - cells_to_grid
+      - select_cell
+      - rank_cells_by_content
+      - compare_cells
+      - cell_majority
+      - grid_of_grids_to_summary
+      - summary_to_grid
+  rule_inference:
+    count: 8
+    primitives:
+      - infer_color_map
+      - infer_shift
+      - infer_scale
+      - infer_symmetry
+      - infer_period
+      - infer_filter
+      - infer_sort_key
+      - infer_condition
+  output_shaping:
+    count: 8
+    primitives:
+      - output_size_from_input
+      - output_size_from_count
+      - output_size_from_object
+      - blank_canvas
+      - canvas_like
+      - place_at_anchor
+      - fit_to_canvas
+      - crop_to_content
+  search_helpers:
+    count: 8
+    primitives:
+      - guess_program
+      - verify_on_train
+      - score_by_mdl
+      - prune_equivalent
+      - try_all_primitives
+      - combine_two
+      - memoize_result
+      - fallback_identity
+total_count_by_group:
+  geometry: 12
+  crop_and_compose: 14
+  color: 12
+  objects: 16
+  object_moves: 10
+  lines_and_fill: 12
+  symmetry_and_patterns: 10
+  counting_and_logic: 8
+  control_flow: 6
+  advanced_geometry: 10
+  object_relations: 14
+  object_properties: 12
+  grouping_and_sorting: 10
+  cell_level_operations: 10
+  path_and_graph: 10
+  grid_as_data: 10
+  rule_inference: 8
+  output_shaping: 8
+  search_helpers: 8
+total_count: 200

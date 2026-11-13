@@ -488,6 +488,23 @@ def apply_primitive(grid: Grid, operation: "Primitive") -> Grid:
     if name == "COPY_ALL": return translate_pixels(grid, *args, copy=True)
     if name == "MOVE_COLOR": return translate_pixels(grid, args[1], args[2], color=args[0])
     if name == "COPY_COLOR": return translate_pixels(grid, args[1], args[2], color=args[0], copy=True)
+    # Object-centric operators share the same typed Primitive/Program path as
+    # grid operators, so MCTS can hybridize them in one instruction stream.
+    if name == "OBJECT_MOVE":
+        from .object_engine.adapters import move_object
+        return move_object(grid, *args)
+    if name == "OBJECT_ROTATE":
+        from .object_engine.adapters import rotate_object
+        return rotate_object(grid, *args)
+    if name == "OBJECT_FLIP_H":
+        from .object_engine.adapters import flip_object_horizontal
+        return flip_object_horizontal(grid, *args)
+    if name == "OBJECT_FLIP_V":
+        from .object_engine.adapters import flip_object_vertical
+        return flip_object_vertical(grid, *args)
+    if name == "OBJECT_SCALE_UP":
+        from .object_engine.adapters import scale_object_up
+        return scale_object_up(grid, *args)
     raise ValueError(f"unknown primitive: {name}")
 
 
@@ -636,6 +653,27 @@ def generate_primitives(training_inputs: tuple[Grid, ...], training_outputs: tup
                 ops.add(Primitive("COPY_COLOR", (color, dy, dx)))
     for direction in ("up", "down", "left", "right"):
         ops.add(Primitive("GRAVITY", (direction,)))
+
+    # Add parameterized object-DSL actions to the same candidate vocabulary.
+    # Object indices are deterministic (sorted bounding boxes) and each
+    # operation must execute successfully on every training input to survive.
+    from .object_engine.model import extract_scene
+    object_count = 0
+    for grid in grids:
+        try:
+            object_count = max(object_count, len(extract_scene(grid).objects))
+        except ValueError:
+            continue
+    for object_index in range(object_count):
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                if dy or dx:
+                    ops.add(Primitive("OBJECT_MOVE", (object_index, dx, dy)))
+        ops.add(Primitive("OBJECT_ROTATE", (object_index,)))
+        ops.add(Primitive("OBJECT_FLIP_H", (object_index,)))
+        ops.add(Primitive("OBJECT_FLIP_V", (object_index,)))
+        for factor in (2, 3):
+            ops.add(Primitive("OBJECT_SCALE_UP", (object_index, factor)))
     return tuple(sorted(ops))
 
 
