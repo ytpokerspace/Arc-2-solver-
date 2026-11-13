@@ -7,6 +7,7 @@ from arc_r2.emoji_engine import render_trace
 from arc_r2.unified_engine import (
     UnifiedConfig, predict_task, run_leave_one_out, solve_training_pairs,
 )
+from arc_r2.primitives import as_grid
 
 
 class UnifiedEngineTests(unittest.TestCase):
@@ -27,7 +28,7 @@ class UnifiedEngineTests(unittest.TestCase):
         result = solve_training_pairs(pairs, self.config)
         self.assertTrue(result.exact_fit)
         self.assertIsNotNone(result.program)
-        self.assertTrue(all(result.program.apply(source) == target for source, target in pairs))
+        self.assertTrue(all(result.program.apply(source) == as_grid(target) for source, target in pairs))
         self.assertGreaterEqual(result.candidates_evaluated, 0)
         self.assertIn(result.source, {"primitive-enumeration", "predictive-mcts"})
 
