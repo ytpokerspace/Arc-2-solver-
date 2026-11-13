@@ -3,11 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import re
 from pathlib import Path
 from .grid import as_grid, to_lists
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 from .object_solver import ObjectExample, ObjectHybridSolver
+from .reasoning_layer import solve_and_remember
+from .reasoning_memory import ReasoningMemory, canonical_fingerprint
 
 
 def _task_examples(task):
@@ -47,6 +50,7 @@ def main(argv=None):
         parser.error("dataset must be a JSON list or ARC task-id mapping")
     args.output.mkdir(parents=True, exist_ok=True)
     log_path = args.output / f"{args.engine}_run.jsonl"
+    memory = ReasoningMemory(args.output / "reasoning_memory.json")
     limits = SearchLimits(max_depth=args.max_depth, candidate_cap=args.candidate_cap,
                           mcts_iterations=args.mcts_iterations)
     started = time.perf_counter()
@@ -60,26 +64,49 @@ def main(argv=None):
             if args.engine == "object":
                 examples = tuple(ObjectExample(as_grid(pair["input"]), as_grid(pair["output"]))
                                  for pair in task["train"])
-                result = ObjectHybridSolver(
+                solver = ObjectHybridSolver(
                     max_depth=min(args.max_depth, 4),
                     candidate_cap=args.candidate_cap,
                     parameter_cap=args.candidate_cap,
-                ).solve(examples)
-                apply_program = result.program.apply
+                )
+                apply_program = None
             else:
                 examples = _task_examples(task)
-                result = HybridSolver(limits).solve(examples)
-                apply_program = result.program.apply
+                solver = HybridSolver(limits)
+                apply_program = None
+            training_signature = canonical_fingerprint({
+                "engine": args.engine,
+                "train": [{"input": to_lists(example.input), "output": to_lists(example.output)}
+                          for example in examples],
+            })
+            task_label = re.sub(r"[^A-Za-z0-9_-]+", "-", str(task.get("task_id") or f"task-{index}"))[:40]
+            result, memory_record = solve_and_remember(
+                solver, examples, memory,
+                record_id=f"{args.engine}-{task_label}-{training_signature[:16]}",
+                title=f"ARC-R2 {args.engine} training run",
+                intent="Find a program that exactly maps the supplied ARC training grids",
+                requirements=["preserve grid dimensions and colors", "prefer exact output equality"],
+                assumptions=["only supplied training pairs are available to the solver"],
+                unknowns=["generalization to hidden test outputs"],
+                representations=["integer grid", "solver program"],
+                hypotheses=[str(result_program) for result_program in []],
+                tags=["arc2", args.engine, "automatic-run"],
+            )
+            apply_program = result.program.apply
             predictions = [to_lists(apply_program(as_grid(case["input"])))
                            for case in task.get("test", [])]
+            verified_patterns = memory.verified_patterns(["arc2", args.engine])
             item = {"task": index, "task_id": task.get("task_id"), "engine": args.engine,
                     "program": str(result.program),
                     "train_exact": result.exact_examples, "train_total": result.total_examples,
                     "score": round(result.score, 6), "candidates": result.candidates_evaluated,
-                    "test_predictions": predictions}
+                    "test_predictions": predictions,
+                    "reasoning_memory_status": memory_record["status"],
+                    "verified_patterns_available": len(verified_patterns)}
             results.append(item)
             print(f"[RESULT] train exact {result.exact_examples}/{result.total_examples}; "
-                  f"program={result.program}; candidates={result.candidates_evaluated}")
+                  f"program={result.program}; candidates={result.candidates_evaluated}; "
+                  f"memory={memory_record['status']}; verified_patterns={len(verified_patterns)}")
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(item, sort_keys=True) + "\n")
     except KeyboardInterrupt:
