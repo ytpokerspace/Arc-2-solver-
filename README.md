@@ -21,6 +21,14 @@ The API in arc_r2/cognitive_calibration.py provides run_calibrated_session, whic
 
 See research/ADAPTIVE_COGNITIVE_CALIBRATION.md for the protocol and limitations.
 
+## Automatic reasoning-memory capture
+
+The local CLI now wraps each baseline or object-engine solve with the structured reasoning recorder. It writes a persistent `reasoning_memory.json` beside the run log under the selected `--output` directory. Records are keyed by engine, task label, and a fingerprint of the training pairs, so repeating the same task updates its record rather than duplicating it.
+
+Each run records the training fit and explicitly labels its evidence scope. A perfect fit on visible training pairs is marked `tested`, not `validated`. The runner also counts matching validated patterns for reporting, but does not yet inject those patterns into candidate generation or alter predictions. This keeps the solver's behavior unchanged while the memory pipeline is tested.
+
+The memory file is runtime output and should be kept with the experiment artifacts, not committed as source code.
+
 ## Run tests
 
 Python 3.10+; standard library only.
