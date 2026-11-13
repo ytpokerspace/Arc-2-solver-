@@ -60,7 +60,8 @@ class UnifiedResult:
     training_pairs: int
     candidates_evaluated: int
     primitive_candidates: int
-    mcts_candidates: int
+    mcts_nodes_created: int
+    mcts_iterations: int
     candidate_evidence: tuple[CandidateEvidence, ...]
 
 
@@ -107,7 +108,7 @@ def solve_training_pairs(
         candidates.append(CandidateEvidence(
             "predictive-mcts", mcts_result.program,
             mcts_result.solved_pairs, mcts_result.total_pairs,
-            mcts_result.nodes_created,
+            mcts_result.iterations,
         ))
 
     # Both engines are allowed to propose candidates. Exact agreement on every
@@ -122,8 +123,9 @@ def solve_training_pairs(
     if not unique:
         return UnifiedResult(
             None, False, None, len(pairs),
-            primitive_result.candidates_evaluated + mcts_result.nodes_created,
-            primitive_result.candidates_evaluated, mcts_result.nodes_created, (),
+            primitive_result.candidates_evaluated + mcts_result.iterations,
+            primitive_result.candidates_evaluated, mcts_result.nodes_created,
+            mcts_result.iterations, (),
         )
 
     winner = min(unique.values(), key=lambda item: _program_key(item.program))
@@ -137,8 +139,9 @@ def solve_training_pairs(
         )
     return UnifiedResult(
         winner.program, True, winner.source, len(pairs),
-        primitive_result.candidates_evaluated + mcts_result.nodes_created,
+        primitive_result.candidates_evaluated + mcts_result.iterations,
         primitive_result.candidates_evaluated, mcts_result.nodes_created,
+        mcts_result.iterations,
         tuple(sorted(unique.values(), key=lambda item: _program_key(item.program))),
     )
 
@@ -201,7 +204,8 @@ def predict_task(task: dict[str, Any], config: UnifiedConfig | None = None) -> d
         "training_pairs": result.training_pairs,
         "candidates_evaluated": result.candidates_evaluated,
         "primitive_candidates": result.primitive_candidates,
-        "mcts_nodes_created": result.mcts_candidates,
+        "mcts_nodes_created": result.mcts_nodes_created,
+        "mcts_iterations": result.mcts_iterations,
         "test_predictions": predictions,
     }
 
