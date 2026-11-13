@@ -55,6 +55,8 @@ class UnifiedEngineTests(unittest.TestCase):
         }
         result = predict_task(task, self.config)
         self.assertEqual(result["status"], "predicted")
+        self.assertIn("📥", result["emoji_trace"])
+        self.assertIn("🌳", result["emoji_trace"])
         self.assertEqual(result["test_predictions"][0]["prediction"], [[3, 0], [0, 0]])
         self.assertNotIn("expected", result["test_predictions"][0])
 
