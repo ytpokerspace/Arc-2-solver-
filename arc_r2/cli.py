@@ -9,7 +9,7 @@ from .grid import as_grid, to_lists
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 from .object_solver import ObjectExample, ObjectHybridSolver
-from .reasoning_layer import solve_and_remember, find_applicable_verified_pattern
+from .reasoning_layer import (solve_and_remember, find_applicable_verified_pattern,\n                              validate_and_promote_pattern)
 from .reasoning_memory import ReasoningMemory, canonical_fingerprint
 
 
@@ -97,6 +97,11 @@ def main(argv=None):
                     representations=["integer grid", "solver program"],
                     tags=["arc2", args.engine, "automatic-run"],
                 )
+                if args.engine == "baseline":
+                    memory_record = validate_and_promote_pattern(
+                        memory, memory_record, result, examples,
+                        solver_factory=lambda: HybridSolver(limits),
+                    )
             apply_program = result.program.apply
             predictions = [to_lists(apply_program(as_grid(case["input"])))
                            for case in task.get("test", [])]
