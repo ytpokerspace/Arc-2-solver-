@@ -93,3 +93,27 @@ jobs:
           name: arc-r2-leave-one-out-validation
           path: arc_r2_validation.json
           if-no-files-found: warn
+
+      - name: Run unified ARC-2 validation on the same public training tasks
+        env:
+          TASK_LIMIT: ${{ github.event.inputs.task_limit || '20' }}
+          ARC_DATASET_REPOSITORY: arcprize/ARC-AGI-2
+          ARC_DATASET_REVISION: f3283f727488ad98fe575ea6a5ac981e4a188e49
+        run: |
+          python -m arc_r2.unified_engine \
+            --mode validate \
+            --dataset arc-agi-2-data/data/training \
+            --limit "$TASK_LIMIT" \
+            --primitive-candidate-cap 1500 \
+            --primitive-max-depth 2 \
+            --mcts-iterations 40 \
+            --mcts-branch-width 10 \
+            --mcts-max-depth 3 \
+            --output arc2_unified_validation.json
+      - name: Upload unified ARC-2 validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc2-unified-validation
+          path: arc2_unified_validation.json
+          if-no-files-found: warn
