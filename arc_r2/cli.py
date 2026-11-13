@@ -9,7 +9,9 @@ from .grid import as_grid, to_lists
 from .search import SearchLimits
 from .solver import Example, HybridSolver
 from .object_solver import ObjectExample, ObjectHybridSolver
-from .reasoning_layer import (solve_and_remember, find_applicable_verified_pattern,\n                              validate_and_promote_pattern)
+from .reasoning_layer import (
+    solve_and_remember, find_applicable_verified_pattern, validate_and_promote_pattern
+)
 from .reasoning_memory import ReasoningMemory, canonical_fingerprint
 
 
