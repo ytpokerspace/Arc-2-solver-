@@ -104,7 +104,12 @@ def solve_staged(
 
     examples = tuple(Example(source, target) for source, target in pairs)
     base_limits = limits or SearchLimits()
-    state_key = lambda program: tuple(program.apply(example.input) for example in examples)
+    def state_key(program: DSLProgram):
+        try:
+            return tuple(program.apply(example.input) for example in examples)
+        except (ValueError, TypeError, IndexError):
+            # Invalid operations must not crash search or collide with valid states.
+            return ("__INVALID__", program.canonical())
     scorer = lambda program: score_program(program, examples)
 
     # B — beam search. The ranked list is checked with the exact oracle.
