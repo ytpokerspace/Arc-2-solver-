@@ -75,8 +75,8 @@ The JSON report records the stage reached, candidate evaluations, selected progr
 
 ## Explicit non-goals for this implementation
 
-- No MCTS.
-- No beam search in the active primitive benchmark.
+- No MCTS or beam search in the default primitive benchmark path (`arc_r2.primitive_benchmark`).
+- The optional staged A -> B -> C engine explicitly uses beam search and MCTS as fallbacks after primitive exact-fit search fails.
 - No random exploration or hidden-test fitting.
 - No claims of complete ARC primitive coverage.
 - No claim that the system has solved ARC-AGI-2.
