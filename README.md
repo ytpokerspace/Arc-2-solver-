@@ -48,10 +48,35 @@ The vocabulary is parameterized from colors and dimensions visible in the fit in
 
 The benchmark reports exact held-out training-pair accuracy, fit coverage, candidate counts, runtime, and per-fold predictions. A task with fewer than two training examples is skipped because it cannot support leave-one-out evaluation.
 
+## Sequential A -> B -> C engine
+
+The optional staged engine runs three existing components in sequence:
+
+1. **A — primitive exact-fit search** (fit_program).
+2. **B — DSL beam search**, only if A finds no exact fit.
+3. **C — DSL MCTS**, only if B finds no exact fit.
+
+Every accepted program is rechecked against every training pair with exact grid equality. Cell/object/relation scores are ranking heuristics only. All stages draw from one candidate-evaluation budget; test inputs are used only to generate predictions after a stage has passed the training oracle. Test outputs are never read.
+
+Run it with:
+
+```bash
+python -m arc_r2.staged_engine \
+  --dataset path/to/ARC-AGI-2/data/training \
+  --budget 10000 \
+  --stage-a-cap 5000 \
+  --beam-width 20 \
+  --max-depth 4 \
+  --mcts-iterations 250 \
+  --output arc_r2_staged_results.json
+```
+
+The JSON report records the stage reached, candidate evaluations, selected program, predictions, and runtime. A training exact-fit is not proof of hidden-test correctness; official evaluation is still required.
+
 ## Explicit non-goals for this implementation
 
-- No MCTS.
-- No beam search in the active primitive benchmark.
+- No MCTS or beam search in the default primitive benchmark path (`arc_r2.primitive_benchmark`).
+- The optional staged A -> B -> C engine explicitly uses beam search and MCTS as fallbacks after primitive exact-fit search fails.
 - No random exploration or hidden-test fitting.
 - No claims of complete ARC primitive coverage.
 - No claim that the system has solved ARC-AGI-2.
