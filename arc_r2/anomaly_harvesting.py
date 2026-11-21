@@ -157,31 +157,34 @@ class AnomalyHarvestingEngine:
             tuple(source for source, _ in pairs), tuple(target for _, target in pairs)
         )
         ranked_per_pair = self._collect_traces(task_id, pairs, primitives)
-        relevant = sorted({op for group in ranked_per_pair for op in group}, key=str)
-
-        candidates = []
-        seen = set()
-        for first in relevant:
-            for second in relevant:
-                candidate = Program((first, second))
-                key = str(candidate)
-                if key in seen:
-                    continue
-                seen.add(key)
-                score, exact = self._score(candidate, pairs)
-                if exact:
-                    candidates.append((score, key, candidate))
-        candidates.sort(key=lambda item: (item[0], item[1]))
+        # Preserve residual rank while deduplicating the per-example operator
+        # shortlist. The probe cap is enforced before executing candidates.
+        relevant = []
+        seen_ops = set()
+        for group in ranked_per_pair:
+            for op in group:
+                if op not in seen_ops:
+                    seen_ops.add(op)
+                    relevant.append(op)
 
         tested = retained = 0
-        for _, _, candidate in candidates:
+        seen_programs = set()
+        for first in relevant:
+            for second in relevant:
+                if tested >= self.max_probes_per_cycle:
+                    break
+                candidate = Program((first, second))
+                key = str(candidate)
+                if key in seen_programs:
+                    continue
+                seen_programs.add(key)
+                tested += 1
+                _, exact = self._score(candidate, pairs)
+                if exact and self.registry.register(candidate):
+                    retained += 1
+                    self.registry.record_hit(candidate)
             if tested >= self.max_probes_per_cycle:
                 break
-            tested += 1
-            _, exact = self._score(candidate, pairs)
-            if exact and self.registry.register(candidate):
-                retained += 1
-                self.registry.record_hit(candidate)
         programs = self.registry.get_all()
         winner = min(programs, key=lambda p: (p.complexity, str(p))) if programs else None
         return HarvestResult(baseline, winner, len(self.harvested_traces), tested,
