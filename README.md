@@ -57,3 +57,12 @@ The benchmark reports exact held-out training-pair accuracy, fit coverage, candi
 - No claim that the system has solved ARC-AGI-2.
 
 The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
+
+
+## Optional anomaly harvesting
+
+The residual-guided anomaly-harvesting engine is available as an opt-in layer in `arc_r2/anomaly_harvesting.py`. The existing `fit_program` path is unchanged.
+
+`fit_program_with_harvesting(examples, candidate_cap=5000, max_probes_per_cycle=64)` first runs the established exact-fit search, then (only on failure) records the best single-primitive residual for each training pair and probes a deterministic, bounded set of two-primitive compositions. A candidate is retained only if it reproduces every supplied training pair exactly. The engine never reads test outputs or modifies the base DSL vocabulary.
+
+Memory accounting estimates Python object sizes; it is not a hard process-RSS limit. Probe count and registry budget are bounded. This is an experimental extension; no benchmark improvement is claimed until measured on the held-out benchmark.
