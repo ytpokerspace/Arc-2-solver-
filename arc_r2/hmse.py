@@ -279,6 +279,23 @@ def execute_procedure(
     return ExecutionResult(procedure.procedure_id, state, tuple(stage_results))
 
 
+def register_arc_methods(registry: MethodRegistry) -> None:
+    """Register adapters for the existing Shape Radar and primitive DSL."""
+    from .primitives import Primitive, apply_primitive, as_grid
+    from .shape_radar import scan_grid
+
+    def radar_scan(state: Mapping[str, Any], params: Mapping[str, Any]) -> Any:
+        input_key = params.get("input_key", "grid")
+        return scan_grid(state[input_key], connectivity=params.get("connectivity", 4))
+
+    def primitive_apply(state: Mapping[str, Any], params: Mapping[str, Any]) -> Any:
+        input_key = params.get("input_key", "grid")
+        operation = Primitive(params["name"], tuple(params.get("args", ())))
+        return apply_primitive(as_grid(state[input_key]), operation)
+
+    registry.register_method("arc.shape_radar.scan", radar_scan)
+    registry.register_method("arc.primitive.apply", primitive_apply)
+
 def compose_procedures(
     procedure_id: str, *procedures: Procedure, description: str = ""
 ) -> Procedure:
@@ -302,6 +319,7 @@ def replace_stage(procedure: Procedure, stage_id: str, replacement: Stage) -> Pr
               for stage in procedure.stages),
         procedure.version + 1,
         procedure.description,
+        procedure.input_keys,
     )
     validate_procedure(updated)
     return updated
@@ -320,6 +338,35 @@ class MethodLibrary:
         temporary.write_text(payload + "\n", encoding="utf-8")
         temporary.replace(target)
 
+    @staticmethod
+    def save_completed(
+        procedure: Procedure, execution: ExecutionResult, path: str | Path
+    ) -> None:
+        """Persist a completed procedure together with its stage-level evidence."""
+        validate_procedure(procedure)
+        expected = tuple(stage.stage_id for stage in procedure.stages)
+        completed = tuple(stage.stage_id for stage in execution.stages)
+        if execution.procedure_id != procedure.procedure_id or completed != expected:
+            raise ValueError("execution does not represent a complete run of this procedure")
+        for stage, result in zip(procedure.stages, execution.stages):
+            allowed = {
+                (partition.partition_id, spec.method_id)
+                for partition in stage.partitions for spec in partition.methods
+            }
+            if (result.selected_partition, result.selected_method) not in allowed:
+                raise ValueError(f"execution selected an unlisted method in {stage.stage_id}")
+        payload = asdict(procedure)
+        payload["execution_record"] = {
+            "completed": True,
+            "total_evaluations": execution.total_evaluations,
+            "stages": [asdict(result) for result in execution.stages],
+        }
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        encoded = json.dumps(payload, indent=2, sort_keys=True)
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_text(encoded + "\n", encoding="utf-8")
+        temporary.replace(target)
     @staticmethod
     def load(path: str | Path) -> Procedure:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
