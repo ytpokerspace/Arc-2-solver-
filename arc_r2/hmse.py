@@ -45,6 +45,16 @@ class Procedure:
     version: int = 1
     description: str = ""
 
+    @property
+    def estimated_steps(self) -> int:
+        return len(self.stages)
+
+    @property
+    def search_budget(self) -> int:
+        return sum(min(stage.max_evaluations,
+                       sum(len(partition.methods) for partition in stage.partitions))
+                   for stage in self.stages)
+
 
 @dataclass(frozen=True)
 class ValidationResult:
@@ -216,6 +226,7 @@ def execute_procedure(
         for partition, spec in _round_robin_candidates(
             stage.partitions, stage.max_evaluations
         ):
+            evaluations += 1
             missing_method_inputs = set(spec.requires) - state.keys()
             if missing_method_inputs:
                 result = ValidationResult(
@@ -240,7 +251,6 @@ def execute_procedure(
                 raise ProcedureError(
                     f"validator {stage.validator_id} returned score outside [0, 1]"
                 )
-            evaluations += 1
             candidate_results.append(CandidateResult(
                 partition.partition_id, spec.method_id, verdict.accepted,
                 verdict.score, dict(verdict.evidence)
