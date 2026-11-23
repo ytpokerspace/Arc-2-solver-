@@ -88,6 +88,11 @@ procedures. It is deliberately separate from any one DSL or solver:
 - Procedures can be composed or have one stage replaced without rewriting the
   rest. `MethodLibrary` saves declarative JSON specifications; executable
   functions are registered separately and are never loaded from saved files.
+  Completed runs can be saved with their selected methods, candidate evidence,
+  and evaluation counts using `MethodLibrary.save_completed`.
+- `register_arc_methods(registry)` plugs the current Shape Radar and primitive
+  DSL into the registry as `arc.shape_radar.scan` and
+  `arc.primitive.apply`. Additional DSLs can register their own method IDs.
 - The procedure exposes an estimated stage count and an upper bound on candidate
   evaluations. The execution trace records the actual selected method, partition,
   candidate evidence, and evaluations.
@@ -97,10 +102,11 @@ Minimal example:
 ```python
 from arc_r2.hmse import (
     MethodRegistry, MethodSpec, SearchPartition, Stage, Procedure,
-    execute_procedure,
+    execute_procedure, register_arc_methods,
 )
 
 registry = MethodRegistry()
+register_arc_methods(registry)
 registry.register_method(
     "count_cells",
     lambda state, params: sum(len(row) for row in state["grid"]),
