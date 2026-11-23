@@ -48,6 +48,29 @@ The vocabulary is parameterized from colors and dimensions visible in the fit in
 
 The benchmark reports exact held-out training-pair accuracy, fit coverage, candidate counts, runtime, and per-fold predictions. A task with fewer than two training examples is skipped because it cannot support leave-one-out evaluation.
 
+## Shape Radar (multi-scale perception)
+
+`arc_r2/shape_radar.py` provides a perception-only scan shared by ARC-1 and
+ARC-2 task inputs. It reports grid/palette statistics, foreground objects under
+4- and 8-connectivity, object cells and bounding boxes, size/aspect ratio,
+perimeter, enclosed holes, reflection symmetries, rotation/reflection-invariant
+shape signatures, repeated-shape groups, and pairwise bounding-box relations.
+The JSON-serializable result deliberately leaves `interpretation` unset:
+perception supplies evidence; the hypothesis engine decides what it means.
+
+Example:
+
+```python
+from arc_r2.shape_radar import scan_grid
+
+report = scan_grid([[0, 2, 0], [2, 2, 0], [0, 0, 3]])
+print(report["objects"])
+print(report["repeated_shapes"])
+```
+
+Run the focused tests with
+`python -m unittest discover -s tests -p 'test_shape_radar.py' -v`.
+
 ## Explicit non-goals for this implementation
 
 - No MCTS.
