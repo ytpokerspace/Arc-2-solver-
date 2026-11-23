@@ -44,6 +44,7 @@ class Procedure:
     stages: tuple[Stage, ...]
     version: int = 1
     description: str = ""
+    input_keys: tuple[str, ...] = ()
 
     @property
     def estimated_steps(self) -> int:
@@ -145,7 +146,7 @@ def validate_procedure(procedure: Procedure) -> None:
     if procedure.version < 1:
         raise ValueError("procedure version must be positive")
     stage_ids: set[str] = set()
-    available: set[str] = set()
+    available: set[str] = set(procedure.input_keys)
     for stage in procedure.stages:
         if not stage.stage_id or stage.stage_id in stage_ids:
             raise ValueError(f"duplicate or empty stage ID: {stage.stage_id!r}")
@@ -283,7 +284,10 @@ def compose_procedures(
 ) -> Procedure:
     """Compose procedures in order; stage dependencies remain explicit."""
     stages = tuple(stage for procedure in procedures for stage in procedure.stages)
-    composed = Procedure(procedure_id, stages, 1, description)
+    input_keys = tuple(dict.fromkeys(
+        key for procedure in procedures for key in procedure.input_keys
+    ))
+    composed = Procedure(procedure_id, stages, 1, description, input_keys)
     validate_procedure(composed)
     return composed
 
@@ -345,6 +349,7 @@ class MethodLibrary:
             stages=tuple(stages),
             version=payload.get("version", 1),
             description=payload.get("description", ""),
+            input_keys=tuple(payload.get("input_keys", ())),
         )
         validate_procedure(procedure)
         return procedure
