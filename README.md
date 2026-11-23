@@ -109,7 +109,7 @@ procedure = Procedure("count-grid", (
     Stage("measure", "cell_count", (
         SearchPartition("geometry", (MethodSpec("count_cells"),)),
     ), requires=("grid",)),
-))
+), input_keys=("grid",))
 result = execute_procedure(procedure, {"grid": [[1, 2], [3, 4]]}, registry)
 assert result.state["cell_count"] == 4
 ```
