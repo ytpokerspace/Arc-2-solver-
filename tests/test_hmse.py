@@ -74,7 +74,7 @@ class HierarchicalMethodEngineTests(unittest.TestCase):
                     MethodSpec("classify", {"offset": 2}, ("objects",)),
                 )),
             ), requires=("objects",)),
-        ))
+        ), input_keys=("grid_size",))
 
         result = execute_procedure(procedure, {"grid_size": 3}, self.registry)
         self.assertEqual(result.state["class"], 5)
