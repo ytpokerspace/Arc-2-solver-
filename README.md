@@ -71,6 +71,54 @@ print(report["repeated_shapes"])
 Run the focused tests with
 `python -m unittest discover -s tests -p 'test_shape_radar.py' -v`.
 
+## Hierarchical Method Synthesis Engine (HMSE)
+
+`arc_r2/hmse.py` is the orchestration layer for reusable, multi-stage
+procedures. It is deliberately separate from any one DSL or solver:
+
+- A procedure is an ordered schedule of dependent stages. Each stage declares
+  required inputs, an output key, a validator, and a bounded candidate budget.
+- Each stage partitions candidate methods into named search families. Candidates
+  are evaluated round-robin across partitions so one large family cannot consume
+  the whole budget before alternatives are considered.
+- The highest-scoring accepted candidate is selected (ties preserve search
+  order). A stage can stop early at its configured score threshold.
+- Later stages receive earlier outputs. Missing dependencies and unvalidated
+  stages fail closed rather than silently continuing.
+- Procedures can be composed or have one stage replaced without rewriting the
+  rest. `MethodLibrary` saves declarative JSON specifications; executable
+  functions are registered separately and are never loaded from saved files.
+- The procedure exposes an estimated stage count and an upper bound on candidate
+  evaluations. The execution trace records the actual selected method, partition,
+  candidate evidence, and evaluations.
+
+Minimal example:
+
+```python
+from arc_r2.hmse import (
+    MethodRegistry, MethodSpec, SearchPartition, Stage, Procedure,
+    execute_procedure,
+)
+
+registry = MethodRegistry()
+registry.register_method(
+    "count_cells",
+    lambda state, params: sum(len(row) for row in state["grid"]),
+)
+procedure = Procedure("count-grid", (
+    Stage("measure", "cell_count", (
+        SearchPartition("geometry", (MethodSpec("count_cells"),)),
+    ), requires=("grid",)),
+))
+result = execute_procedure(procedure, {"grid": [[1, 2], [3, 4]]}, registry)
+assert result.state["cell_count"] == 4
+```
+
+The HMSE executes schedules formulated by upstream perception/rule-discovery
+components. It does not yet automatically invent the complete schedule or infer
+new ARC rules; that is the next integration layer. Run its tests with
+`python -m unittest discover -s tests -p 'test_hmse.py' -v`.
+
 ## Explicit non-goals for this implementation
 
 - No MCTS.
