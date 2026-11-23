@@ -14,6 +14,7 @@ from arc_r2.hmse import (
     compose_procedures,
     execute_procedure,
     replace_stage,
+    register_arc_methods,
 )
 
 
@@ -127,7 +128,47 @@ class HierarchicalMethodEngineTests(unittest.TestCase):
         self.assertEqual(updated.version, 2)
         self.assertEqual(updated.stages[0], replacement)
         self.assertEqual(original.stages[0], original.stages[0])
+        self.assertEqual(updated.input_keys, original.input_keys)
 
+    def test_existing_arc_radar_and_primitive_dsl_are_pluggable(self):
+        register_arc_methods(self.registry)
+        procedure = Procedure("radar-then-transform", (
+            Stage("perceive", "radar", (
+                SearchPartition("perception", (
+                    MethodSpec("arc.shape_radar.scan", {"input_key": "grid"}),
+                )),
+            ), requires=("grid",)),
+            Stage("transform", "prediction", (
+                SearchPartition("dsl", (
+                    MethodSpec("arc.primitive.apply", {
+                        "input_key": "grid", "name": "RECOLOR", "args": [1, 2]
+                    }),
+                )),
+            ), requires=("grid", "radar")),
+        ), input_keys=("grid",))
+        result = execute_procedure(procedure, {"grid": [[0, 1]]}, self.registry)
+        self.assertEqual(result.state["prediction"], ((0, 2),))
+        self.assertEqual(result.state["radar"]["grid"]["width"], 2)
+        self.assertEqual(procedure.estimated_steps, 2)
+        self.assertEqual(procedure.search_budget, 2)
+
+    def test_completed_procedure_saves_execution_evidence(self):
+        self.registry.register_method("produce", lambda state, params: "result")
+        procedure = Procedure("completed", (
+            Stage("produce", "answer", (
+                SearchPartition("simple", (MethodSpec("produce"),)),
+            )),
+        ))
+        execution = execute_procedure(procedure, {}, self.registry)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "completed.json"
+            MethodLibrary.save_completed(procedure, execution, path)
+            restored = MethodLibrary.load(path)
+            import json
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(restored, procedure)
+        self.assertTrue(payload["execution_record"]["completed"])
+        self.assertEqual(payload["execution_record"]["total_evaluations"], 1)
     def test_procedures_compose_in_dependency_order(self):
         first = Procedure("one", (
             Stage("a", "x", (SearchPartition("p", (MethodSpec("a"),)),)),
