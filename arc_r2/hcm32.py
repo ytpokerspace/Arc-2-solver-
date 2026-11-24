@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -84,6 +85,10 @@ SUBREGION_IDS = tuple(f"Q{i:02d}.S{j:02d}" for i in range(1, 33) for j in range(
 
 class HCM32FormatError(ValueError):
     """Raised when persisted HCM-32 data is malformed or incompatible."""
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _require_text(value: Any, field: str) -> str:
@@ -324,6 +329,7 @@ class HCM32Memory:
             "name": _require_text(name, "name"), "description": _require_text(description, "description") if description else "",
             "quadrant_refs": list(dict.fromkeys(quadrant_refs)),
             "procedure_refs": procedure_refs, "evidence_refs": [], "status": status, "version": 1,
+            "created_at": _utc_now(),
         }
         self.data["nodes"][node_id] = record
         return record
@@ -353,6 +359,7 @@ class HCM32Memory:
             "relationship_type": relationship_type, "directed": bool(directed),
             "strength": strength, "strength_basis": _require_text(strength_basis, "strength_basis"),
             "status": status, "successful_uses": 0, "failed_uses": 0, "evidence_refs": [],
+            "created_at": _utc_now(),
         }
         self.data["connections"][connection_id] = record
         return record
@@ -373,7 +380,7 @@ class HCM32Memory:
             "input_constraints": list(input_constraints or []),
             "inverse_procedure_id": inverse_procedure_id, "status": status,
             "evidence_refs": list(evidence_refs or []), "reuse_successes": 0,
-            "reuse_failures": 0, "version": 1,
+            "reuse_failures": 0, "version": 1, "created_at": _utc_now(),
         }
         if status != "draft":
             raise ValueError("new procedures start as drafts; use set_procedure_status after evidence")
@@ -399,7 +406,7 @@ class HCM32Memory:
         if result not in EVIDENCE_RESULTS:
             raise ValueError("invalid evidence result")
         record = {
-            "evidence_id": evidence_id, "subject_type": subject_type,
+            "evidence_id": evidence_id, "subject_type": subject_type, "timestamp": _utc_now(),
             "subject_id": subject_id, "evidence_type": _require_text(evidence_type, "evidence_type"),
             "result": result, "input_fingerprint": input_fingerprint,
             "expected_fingerprint": expected_fingerprint,
@@ -473,7 +480,7 @@ class HCM32Memory:
             "candidate_id": candidate_id, "input_procedures": list(input_procedures),
             "operation_sequence": list(operation_sequence),
             "generation_method": _require_text(generation_method, "generation_method"),
-            "status": status, "evidence_refs": [],
+            "status": status, "evidence_refs": [], "created_at": _utc_now(),
         }
         self.data["candidates"][candidate_id] = record
         return record
@@ -490,6 +497,7 @@ class HCM32Memory:
             procedure["reuse_failures"] += 1
         event = {
             "event_number": len(self.data["events"]) + 1,
+            "timestamp": _utc_now(),
             "event_type": "procedure_application", "subject_id": procedure_id,
             "result": result, "task_ref": task_ref,
         }
