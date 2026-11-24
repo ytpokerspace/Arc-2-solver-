@@ -29,10 +29,12 @@ def _placed(color: int, shape: tuple[tuple[int, int], ...],
     for r, c in shape:
         if rotate:
             r, c = c, -r
-        points.append((top + r, left + c))
+        points.append((r, c))
     min_r = min(r for r, _ in points)
     min_c = min(c for _, c in points)
-    return _object(color, {(r - min_r, c - min_c) for r, c in points})
+    return _object(color, {
+        (top + r - min_r, left + c - min_c) for r, c in points
+    })
 
 
 def _grid(objects: tuple[GridObject, ...], height: int = 20,
