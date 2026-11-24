@@ -53,16 +53,24 @@ def _position_similarity(a: GridObject, b: GridObject, a_size: tuple[int, int], 
     bc = ((b.bbox[1] + b.bbox[3]) / 2) / max(b_size[1] - 1, 1)
     return max(0.0, 1.0 - hypot(ar - br, ac - bc) / 2**0.5)
 
-def _score(a: GridObject, b: GridObject, a_size: tuple[int, int], b_size: tuple[int, int]) -> float:
+def _appearance_score(a: GridObject, b: GridObject) -> float:
+    """Score identity evidence that does not depend on location."""
     color = 1.0 if a.color == b.color else 0.0
     shape = _shape_similarity(a, b)
     size = _ratio_similarity(a.size, b.size)
     aspect = _ratio_similarity(a.width / a.height, b.width / b.height)
-    position = _position_similarity(a, b, a_size, b_size)
-    return 0.30 * color + 0.35 * shape + 0.15 * size + 0.10 * aspect + 0.10 * position
+    return 0.30 * color + 0.35 * shape + 0.15 * size + 0.10 * aspect
+
+def _score(a: GridObject, b: GridObject, a_size: tuple[int, int], b_size: tuple[int, int]) -> float:
+    return _appearance_score(a, b) + 0.10 * _position_similarity(a, b, a_size, b_size)
 
 def match_identities(reference: IdentityState, target_grid: Grid, *, threshold: float = 0.82, margin: float = 0.12) -> IdentityMatchResult:
-    """Match IDs to a new grid; weak or non-unique candidates are left unmatched."""
+    """Match IDs to a new grid; weak or non-unique candidates are left unmatched.
+
+    Location may break a tie only when appearance evidence is itself sufficiently
+    distinctive. If multiple references or targets are indistinguishable by
+    color/shape/size/aspect, the matcher abstains instead of inventing identity.
+    """
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("threshold must be between 0 and 1")
     if not 0.0 <= margin <= 1.0:
@@ -70,7 +78,9 @@ def match_identities(reference: IdentityState, target_grid: Grid, *, threshold: 
     grid = as_grid(target_grid)
     targets = detect_objects(grid)
     refs = list(reference.objects)
-    scores = [[_score(obj, target, (reference.height, reference.width), (len(grid), len(grid[0]))) for target in targets] for _, obj in refs]
+    target_size = (len(grid), len(grid[0]))
+    scores = [[_score(obj, target, (reference.height, reference.width), target_size) for target in targets] for _, obj in refs]
+    appearance = [[_appearance_score(obj, target) for target in targets] for _, obj in refs]
     accepted, ambiguous, used_targets, accepted_refs = [], [], set(), set()
     for ri, (object_id, _) in enumerate(refs):
         ranked = sorted(range(len(targets)), key=lambda ti: (-scores[ri][ti], ti))
@@ -80,9 +90,16 @@ def match_identities(reference: IdentityState, target_grid: Grid, *, threshold: 
         best_score = scores[ri][best]
         second = scores[ri][ranked[1]] if len(ranked) > 1 else 0.0
         competing = max((scores[other][best] for other in range(len(refs)) if other != ri), default=0.0)
+        best_appearance = appearance[ri][best]
+        second_appearance = max((appearance[ri][ti] for ti in range(len(targets)) if ti != best), default=0.0)
+        competing_appearance = max((appearance[other][best] for other in range(len(refs)) if other != ri), default=0.0)
         if best_score < threshold:
             continue
-        if best_score - second < margin or best_score - competing < margin or best in used_targets:
+        # A location-only advantage is not enough to distinguish repeated objects.
+        if (best_score - second < margin or best_score - competing < margin
+                or best_appearance - second_appearance < margin
+                or best_appearance - competing_appearance < margin
+                or best in used_targets):
             ambiguous.append(object_id)
             continue
         accepted.append(IdentityMatch(object_id, best, round(best_score, 6)))
