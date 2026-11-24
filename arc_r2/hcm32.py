@@ -217,6 +217,13 @@ class HCM32Memory:
                 "node": raw["nodes"], "connection": raw["connections"],
                 "procedure": raw["procedures"], "candidate": raw["candidates"],
             }
+            for collection_name, collection in collections.items():
+                for record_id, record in collection.items():
+                    refs = record.get("evidence_refs", [])
+                    if not isinstance(refs, list) or any(ref not in raw["evidence"] for ref in refs):
+                        raise HCM32FormatError(
+                            f"invalid evidence references in {collection_name} {record_id}"
+                        )
             for evidence_id, evidence in raw["evidence"].items():
                 if evidence.get("result") not in EVIDENCE_RESULTS:
                     raise HCM32FormatError(f"invalid evidence result: {evidence_id}")
@@ -509,6 +516,20 @@ class HCM32Memory:
         return [edge for edge in self.data["connections"].values()
                 if edge["source"] == wanted or edge["target"] == wanted
                 or (not edge["directed"] and (edge["source"] == wanted or edge["target"] == wanted))]
+
+    def nodes_in_region(self, region_id: str) -> list[dict[str, Any]]:
+        if region_id not in REGIONS:
+            raise KeyError(region_id)
+        accepted = {region_id}
+        if REGIONS[region_id]["region_type"] == "quadrant":
+            accepted.update(
+                child_id for child_id, child in REGIONS.items()
+                if child.get("parent_id") == region_id
+            )
+        return [
+            node for node in self.data["nodes"].values()
+            if accepted.intersection(node["quadrant_refs"])
+        ]
 
     def procedures_for_node(self, node_id: str) -> list[dict[str, Any]]:
         node = self.data["nodes"].get(node_id)
