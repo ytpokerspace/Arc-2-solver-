@@ -335,16 +335,20 @@ class HCM32Memory:
         return record
 
     @staticmethod
-    def _require_passed_evidence(record: Mapping[str, Any], evidence: Mapping[str, Any]) -> None:
+    def _require_evidence_result(
+        record: Mapping[str, Any], evidence: Mapping[str, Any], result: str
+    ) -> None:
         refs = record.get("evidence_refs", [])
-        if not any(ref in evidence and evidence[ref].get("result") == "passed" for ref in refs):
-            raise ValueError("a passed evidence record is required for this status")
+        if not any(ref in evidence and evidence[ref].get("result") == result for ref in refs):
+            raise ValueError(f"a {result} evidence record is required for this status")
 
     def set_node_status(self, node_id: str, status: str) -> None:
         if node_id not in self.data["nodes"] or status not in NODE_STATUSES:
             raise ValueError("unknown node or invalid status")
         if status in {"supported", "verified"}:
             self._require_evidence_result(self.data["nodes"][node_id], self.data["evidence"], "passed")
+        elif status == "rejected":
+            self._require_evidence_result(self.data["nodes"][node_id], self.data["evidence"], "failed")
         self.data["nodes"][node_id]["status"] = status
 
     def set_connection_status(self, connection_id: str, status: str) -> None:
@@ -352,13 +356,17 @@ class HCM32Memory:
             raise ValueError("unknown connection or invalid status")
         if status in {"supported", "verified"}:
             self._require_evidence_result(self.data["connections"][connection_id], self.data["evidence"], "passed")
+        elif status == "rejected":
+            self._require_evidence_result(self.data["connections"][connection_id], self.data["evidence"], "failed")
         self.data["connections"][connection_id]["status"] = status
 
     def set_procedure_status(self, procedure_id: str, status: str) -> None:
         if procedure_id not in self.data["procedures"] or status not in PROCEDURE_STATUSES:
             raise ValueError("unknown procedure or invalid status")
-        if status == "verified":
+        if status in {"tested", "verified"}:
             self._require_evidence_result(self.data["procedures"][procedure_id], self.data["evidence"], "passed")
+        elif status == "deprecated":
+            self._require_evidence_result(self.data["procedures"][procedure_id], self.data["evidence"], "failed")
         self.data["procedures"][procedure_id]["status"] = status
 
     def set_candidate_status(self, candidate_id: str, status: str) -> None:
@@ -366,6 +374,8 @@ class HCM32Memory:
             raise ValueError("unknown candidate or invalid status")
         if status == "validated":
             self._require_evidence_result(self.data["candidates"][candidate_id], self.data["evidence"], "passed")
+        elif status == "rejected":
+            self._require_evidence_result(self.data["candidates"][candidate_id], self.data["evidence"], "failed")
         self.data["candidates"][candidate_id]["status"] = status
 
     def add_candidate(
