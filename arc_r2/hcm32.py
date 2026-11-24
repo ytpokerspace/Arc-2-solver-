@@ -246,7 +246,7 @@ class HCM32Memory:
             "node_id": node_id, "node_type": _require_text(node_type, "node_type"),
             "name": _require_text(name, "name"), "description": description,
             "quadrant_refs": list(dict.fromkeys(quadrant_refs)),
-            "procedure_refs": list(procedure_refs or []), "status": status, "version": 1,
+            "procedure_refs": list(procedure_refs or []), "evidence_refs": [], "status": status, "version": 1,
         }
         self.data["nodes"][node_id] = record
         return record
@@ -328,7 +328,43 @@ class HCM32Memory:
             "details": _json_copy(dict(details or {}), "details"),
         }
         self.data["evidence"][evidence_id] = record
+        subject = self.data[collection][subject_id]
+        subject.setdefault("evidence_refs", []).append(evidence_id)
         return record
+
+    @staticmethod
+    def _require_passed_evidence(record: Mapping[str, Any], evidence: Mapping[str, Any]) -> None:
+        refs = record.get("evidence_refs", [])
+        if not any(ref in evidence and evidence[ref].get("result") == "passed" for ref in refs):
+            raise ValueError("a passed evidence record is required for this status")
+
+    def set_node_status(self, node_id: str, status: str) -> None:
+        if node_id not in self.data["nodes"] or status not in NODE_STATUSES:
+            raise ValueError("unknown node or invalid status")
+        if status in {"supported", "verified"}:
+            self._require_passed_evidence(self.data["nodes"][node_id], self.data["evidence"])
+        self.data["nodes"][node_id]["status"] = status
+
+    def set_connection_status(self, connection_id: str, status: str) -> None:
+        if connection_id not in self.data["connections"] or status not in CONNECTION_STATUSES:
+            raise ValueError("unknown connection or invalid status")
+        if status in {"supported", "verified"}:
+            self._require_passed_evidence(self.data["connections"][connection_id], self.data["evidence"])
+        self.data["connections"][connection_id]["status"] = status
+
+    def set_procedure_status(self, procedure_id: str, status: str) -> None:
+        if procedure_id not in self.data["procedures"] or status not in PROCEDURE_STATUSES:
+            raise ValueError("unknown procedure or invalid status")
+        if status == "verified":
+            self._require_passed_evidence(self.data["procedures"][procedure_id], self.data["evidence"])
+        self.data["procedures"][procedure_id]["status"] = status
+
+    def set_candidate_status(self, candidate_id: str, status: str) -> None:
+        if candidate_id not in self.data["candidates"] or status not in CANDIDATE_STATUSES:
+            raise ValueError("unknown candidate or invalid status")
+        if status == "validated":
+            self._require_passed_evidence(self.data["candidates"][candidate_id], self.data["evidence"])
+        self.data["candidates"][candidate_id]["status"] = status
 
     def add_candidate(
         self, candidate_id: str, input_procedures: list[str],
