@@ -155,3 +155,26 @@ python -m arc_r2.hmse_demo \
 This is a single-task integration demonstration, not an ARC benchmark score.
 The HMSE schedule is authored for the demonstration; automatic schedule
 invention and general ARC rule induction are not claimed.
+
+
+## Second Shape Radar + HMSE demonstration: spatial relocation
+
+A second pinned ARC-AGI-2 training task tests a different rule family:
+four isolated color markers are moved into the cells of a central 2x2 anchor
+according to their original diagonal quadrants. The fixture contains only the
+three training pairs; test inputs and outputs are excluded.
+
+See [docs/HMSE_SPATIAL_DEMO.md](docs/HMSE_SPATIAL_DEMO.md) for the protocol.
+Run:
+
+\`\`\`bash
+python -m arc_r2.hmse_spatial_demo \\
+  --task-json tests/fixtures/arc_agi2_d89b689b_train.json \\
+  --candidate-cap 1500 \\
+  --max-depth 2 \\
+  --output arc_hmse_spatial_demo.json
+\`\`\`
+
+The spatial proposer and three-stage schedule are task-specific. This is a
+second integration demonstration, not evidence of general ARC accuracy or
+automatic rule discovery.
