@@ -165,15 +165,21 @@ class HCM32Memory:
             for key, record in raw["nodes"].items():
                 if not isinstance(record, dict) or record.get("node_id") != key:
                     raise HCM32FormatError(f"invalid node record: {key}")
-                if not isinstance(record.get("quadrant_refs"), list) or any(
+                if not isinstance(record.get("quadrant_refs"), list) or not record["quadrant_refs"] or any(
                     ref not in REGIONS for ref in record["quadrant_refs"]
                 ):
                     raise HCM32FormatError(f"invalid region references in node: {key}")
+                if not isinstance(record.get("procedure_refs"), list) or any(
+                    ref not in raw["procedures"] for ref in record["procedure_refs"]
+                ):
+                    raise HCM32FormatError(f"invalid procedure references in node: {key}")
             for key, record in raw["connections"].items():
                 if not isinstance(record, dict) or record.get("connection_id") != key:
                     raise HCM32FormatError(f"invalid connection record: {key}")
                 _validate_endpoint(record.get("source"))
                 _validate_endpoint(record.get("target"))
+                if record.get("relationship_type") not in RELATION_TYPES:
+                    raise HCM32FormatError(f"invalid relationship type in connection: {key}")
                 if record["source"]["kind"] == "node" and record["source"]["id"] not in raw["nodes"]:
                     raise HCM32FormatError(f"missing source node in connection: {key}")
                 if record["target"]["kind"] == "node" and record["target"]["id"] not in raw["nodes"]:
@@ -182,12 +188,23 @@ class HCM32Memory:
                 if not isinstance(record, dict) or record.get("procedure_id") != key:
                     raise HCM32FormatError(f"invalid procedure record: {key}")
                 self._validate_procedure_record(record, raw["procedures"], allow_missing_inverse=True)
+                inverse = record.get("inverse_procedure_id")
+                if inverse and inverse != key and inverse not in raw["procedures"]:
+                    raise HCM32FormatError(f"missing inverse procedure for: {key}")
             for key, record in raw["evidence"].items():
                 if not isinstance(record, dict) or record.get("evidence_id") != key:
                     raise HCM32FormatError(f"invalid evidence record: {key}")
             for key, record in raw["candidates"].items():
                 if not isinstance(record, dict) or record.get("candidate_id") != key:
                     raise HCM32FormatError(f"invalid candidate record: {key}")
+                sources = record.get("input_procedures")
+                sequence = record.get("operation_sequence")
+                if not isinstance(sources, list) or not sources or any(
+                    item not in raw["procedures"] for item in sources
+                ):
+                    raise HCM32FormatError(f"invalid source procedures in candidate: {key}")
+                if not isinstance(sequence, list) or not sequence or any(item not in sources for item in sequence):
+                    raise HCM32FormatError(f"invalid operation sequence in candidate: {key}")
 
             # Validate all evidence links and evidence-gated statuses after every
             # collection has been loaded, so references may be stored in any order.
@@ -299,11 +316,14 @@ class HCM32Memory:
             raise ValueError("quadrant_refs must be a non-empty list")
         if any(ref not in REGIONS for ref in quadrant_refs):
             raise ValueError("quadrant_refs contains an unknown region")
+        procedure_refs = list(procedure_refs or [])
+        if any(ref not in self.data["procedures"] for ref in procedure_refs):
+            raise ValueError("procedure_refs contains an unknown procedure")
         record = {
             "node_id": node_id, "node_type": _require_text(node_type, "node_type"),
-            "name": _require_text(name, "name"), "description": description,
+            "name": _require_text(name, "name"), "description": _require_text(description, "description") if description else "",
             "quadrant_refs": list(dict.fromkeys(quadrant_refs)),
-            "procedure_refs": list(procedure_refs or []), "evidence_refs": [], "status": status, "version": 1,
+            "procedure_refs": procedure_refs, "evidence_refs": [], "status": status, "version": 1,
         }
         self.data["nodes"][node_id] = record
         return record
