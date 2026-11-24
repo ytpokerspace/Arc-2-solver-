@@ -9,6 +9,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .hmse import (
