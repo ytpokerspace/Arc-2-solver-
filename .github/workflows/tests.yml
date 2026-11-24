@@ -59,6 +59,21 @@ jobs:
             semantic_identity_randomized.json
             semantic_identity_randomized.md
           if-no-files-found: error
+      - name: Run ARC-AGI-2 training-pair identity association
+        run: |
+          python -m arc_r2.semantic_identity_arc_fixture \
+            --task-json tests/fixtures/arc_agi2_d89b689b_train.json \
+            --output semantic_identity_arc_fixture.json \
+            --summary semantic_identity_arc_fixture.md
+          cat semantic_identity_arc_fixture.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ARC training-pair identity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-arc-training-pairs
+          path: |
+            semantic_identity_arc_fixture.json
+            semantic_identity_arc_fixture.md
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
