@@ -182,18 +182,21 @@ automatic rule discovery.
 
 ## Shared rule selector: choose from training evidence
 
-The shared selector evaluates both registered rule families (hole-filling and
-anchor-quadrant relocation) against every visible training pair. It selects
-only a unique exact fit; unsupported or ambiguous cases remain unresolved.
+The selector evaluates three registered rule families (hole-filling,
+anchor-quadrant relocation, and reflection) against visible training pairs.
+It selects only a unique exact fit; unsupported or ambiguous cases remain
+unresolved. The third reflection fixture is synthetic and is explicitly not
+counted as an ARC-AGI task.
 
-\`\`\`bash
-python -m arc_r2.hmse_rule_selector \\
-  --task-json tests/fixtures/arc_agi2_00d62c1b_train.json \\
-  --task-json tests/fixtures/arc_agi2_d89b689b_train.json \\
-  --candidate-cap 1500 \\
-  --max-depth 2 \\
+```bash
+python -m arc_r2.hmse_rule_selector \
+  --task-json tests/fixtures/arc_agi2_00d62c1b_train.json \
+  --task-json tests/fixtures/arc_agi2_d89b689b_train.json \
+  --task-json tests/fixtures/synthetic_reflection_train.json \
+  --candidate-cap 1500 \
+  --max-depth 2 \
   --output arc_hmse_selector_report.json
-\`\`\`
+```
 
 See [docs/HMSE_RULE_SELECTOR.md](docs/HMSE_RULE_SELECTOR.md). This tests
-selection between two authored rule families, not open-ended rule discovery.
+selection among three authored rule families, not open-ended rule discovery.
