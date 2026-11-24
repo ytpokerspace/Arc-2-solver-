@@ -80,14 +80,14 @@ def _evaluate(tasks, candidate_cap: int, max_depth: int, bridge: HCM32Bridge | N
 
 def run_transfer_benchmark(
     dataset: Path,
-    task_limit: int = 40,
+    task_limit: int = 1000,
     candidate_cap: int = 1500,
     max_depth: int = 1,
     memory_path: Path = Path("hcm32_transfer_memory.json"),
 ) -> dict[str, Any]:
     """Learn on even-indexed tasks, freeze memory, and evaluate odd-indexed tasks."""
-    if not 2 <= task_limit <= 500:
-        raise ValueError("task_limit must be in 2..500")
+    if not 2 <= task_limit <= 1000:
+        raise ValueError("task_limit must be in 2..1000")
     if not 1 <= candidate_cap <= 50000:
         raise ValueError("candidate_cap must be in 1..50000")
     if not 0 <= max_depth <= 2:
@@ -191,7 +191,7 @@ def run_transfer_benchmark(
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Measure task-disjoint HCM-32 transfer on public ARC training pairs")
     parser.add_argument("--dataset", required=True, type=Path)
-    parser.add_argument("--limit", type=int, default=40)
+    parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--candidate-cap", type=int, default=1500)
     parser.add_argument("--max-depth", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--memory", type=Path, default=Path("hcm32_transfer_memory.json"))
