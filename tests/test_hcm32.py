@@ -25,7 +25,7 @@ class HCM32MemoryTests(unittest.TestCase):
             "horizontal_reflection",
             [{"operator": "REFLECT", "parameters": {"axis": "left-right"}}],
             inverse_procedure_id="PR-REFLECT-H",
-            status="verified",
+            status="draft",
         )
 
     def test_catalog_has_32_primary_and_128_subregions(self):
@@ -42,7 +42,7 @@ class HCM32MemoryTests(unittest.TestCase):
     def test_cross_family_and_cross_level_connections(self):
         self.memory.add_node(
             "KN-REFLECTION", "transformation_rule", "horizontal reflection",
-            ["Q22.S02"], status="verified",
+            ["Q22.S02"], status="hypothesis",
         )
         self.memory.add_node(
             "KN-SYMMETRY", "visual_concept", "bilateral symmetry",
@@ -89,6 +89,9 @@ class HCM32MemoryTests(unittest.TestCase):
             expected_fingerprint="sha256:original",
             actual_fingerprint="sha256:original",
         )
+        self.memory.set_procedure_status("PR-REFLECT-H", "verified")
+        self.memory.add_evidence("EV-2", "candidate", "CB-1", "held_out_validation", "passed")
+        self.memory.set_candidate_status("CB-1", "validated")
         self.memory.record_application("PR-REFLECT-H", "passed", task_ref="task-B")
         self.memory.save()
 
@@ -96,9 +99,20 @@ class HCM32MemoryTests(unittest.TestCase):
         procedure = restored.data["procedures"]["PR-REFLECT-H"]
         self.assertEqual(procedure["inverse_procedure_id"], "PR-REFLECT-H")
         self.assertEqual(procedure["reuse_successes"], 1)
-        self.assertEqual(restored.data["candidates"]["CB-1"]["status"], "generated")
+        self.assertEqual(restored.data["candidates"]["CB-1"]["status"], "validated")
         self.assertEqual(restored.data["evidence"]["EV-1"]["result"], "passed")
         self.assertEqual(restored.data["events"][0]["event_number"], 1)
+
+    def test_verified_status_requires_passed_evidence(self):
+        self._reflection_procedure()
+        with self.assertRaises(ValueError):
+            self.memory.set_procedure_status("PR-REFLECT-H", "verified")
+        self.memory.add_candidate(
+            "CB-1", ["PR-REFLECT-H"], ["PR-REFLECT-H"],
+            generation_method="single_rule_reuse",
+        )
+        with self.assertRaises(ValueError):
+            self.memory.set_candidate_status("CB-1", "validated")
 
     def test_failed_application_is_preserved_without_erasing_success(self):
         self._reflection_procedure()
