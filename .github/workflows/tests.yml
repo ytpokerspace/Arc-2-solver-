@@ -29,6 +29,67 @@ jobs:
           name: semantic-identity-preflight
           path: semantic_identity_experiment.json
           if-no-files-found: error
+      - name: Run semantic identity stress matrix and publish summary
+        run: |
+          python -m arc_r2.semantic_identity_stress \
+            --output semantic_identity_stress.json \
+            --summary semantic_identity_stress.md
+          cat semantic_identity_stress.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload semantic identity stress matrix reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-stress-matrix
+          path: |
+            semantic_identity_stress.json
+            semantic_identity_stress.md
+          if-no-files-found: error
+      - name: Run 250 seeded randomized identity trials
+        run: |
+          python -m arc_r2.semantic_identity_randomized \
+            --seed 20261124 \
+            --trials 250 \
+            --output semantic_identity_randomized.json \
+            --summary semantic_identity_randomized.md
+          cat semantic_identity_randomized.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload randomized identity reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-randomized
+          path: |
+            semantic_identity_randomized.json
+            semantic_identity_randomized.md
+          if-no-files-found: error
+      - name: Run ARC-AGI-2 training-pair identity association
+        run: |
+          python -m arc_r2.semantic_identity_arc_fixture \
+            --task-json tests/fixtures/arc_agi2_d89b689b_train.json \
+            --output semantic_identity_arc_fixture.json \
+            --summary semantic_identity_arc_fixture.md
+          cat semantic_identity_arc_fixture.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ARC training-pair identity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-arc-training-pairs
+          path: |
+            semantic_identity_arc_fixture.json
+            semantic_identity_arc_fixture.md
+          if-no-files-found: error
+      - name: Run 250 same-color shape-based identity trials
+        run: |
+          python -m arc_r2.semantic_identity_same_color \
+            --seed 20261125 \
+            --trials 250 \
+            --output semantic_identity_same_color.json \
+            --summary semantic_identity_same_color.md
+          cat semantic_identity_same_color.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload same-color identity reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-same-color
+          path: |
+            semantic_identity_same_color.json
+            semantic_identity_same_color.md
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
