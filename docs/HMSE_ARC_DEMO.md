@@ -28,7 +28,7 @@ python -m arc_r2.hmse_demo \\
 Or run the regression test:
 
 \`\`\`bash
-python -m unittest tests.test_hmse_arc_demo -v
+python -m unittest discover -s tests -p test_hmse_arc_demo.py -v
 \`\`\`
 
 ## Protocol
