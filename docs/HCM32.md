@@ -147,7 +147,9 @@ Not yet implemented:
 
 Those are later stages. This prototype first establishes stable storage semantics and tests.
 
-## 6. Runtime execution and selection\n\n`HCM32Runtime` executes only explicitly registered trusted operators; persisted procedure records remain declarative and are never evaluated as code. The built-in v1 operators are REFLECT (`left-right` or `top-bottom`), ROTATE (one, two, or three clockwise quarter-turns), and TRANSPOSE. Inputs must be non-empty rectangular grids. Unknown operators, constraints, or malformed parameters fail closed.\n\nSelection examines only procedures with verified status attached to a knowledge node. It returns a procedure only when exactly one candidate reproduces the demonstration output; zero matches or multiple matches return `None`. Application does not itself promote a procedure or record success: the caller must compare against an independently established expected output, then attach evidence and record the outcome.\n\n## 7. Tests
+## 6. Runtime execution and selection
+
+`HCM32Runtime` executes only explicitly registered trusted operators; persisted procedure records remain declarative and are never evaluated as code. The built-in v1 operators are REFLECT (`left-right` or `top-bottom`), ROTATE (one, two, or three clockwise quarter-turns), and TRANSPOSE. Inputs must be non-empty rectangular grids. Unknown operators, constraints, or malformed parameters fail closed.\n\nSelection examines only procedures with verified status attached to a knowledge node. It returns a procedure only when exactly one candidate reproduces the demonstration output; zero matches or multiple matches return `None`. Application does not itself promote a procedure or record success: the caller must compare against an independently established expected output, then attach evidence and record the outcome.\n\n## 7. Tests
 
 Run:
 
