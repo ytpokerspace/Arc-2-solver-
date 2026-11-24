@@ -112,8 +112,10 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
     exact = sum(row["held_out_exact"] for row in folds)
     fit = sum(row["fit_exact"] for row in folds)
     return {
-        "engine": "primitive-first-exhaustive",
-        "search_methods": ["deterministic primitive enumeration", "one- and two-operation composition"],
+        "engine": "primitive-first-exhaustive+hcm32" if hcm32 else "primitive-first-exhaustive",
+        "search_methods": (["verified HCM-32 exact-fit retrieval", "deterministic primitive enumeration",
+                            "one- and two-operation composition"] if hcm32 else
+                           ["deterministic primitive enumeration", "one- and two-operation composition"]),
         "mcts_used": False,
         "beam_search_used": False,
         "dataset": dataset.name,
