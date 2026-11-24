@@ -1,8 +1,8 @@
 """Same-color randomized stress for shape-based object identity matching.
 
 Every object has the same color. Ground-truth correspondence is derived from
-unique shape classes preserved under rotation, while positions and detection
-order change. Objects are kept 4-disconnected so the component detector sees
+unique shape classes preserved under rotation and reflection, while positions
+and detection order change. Objects are kept 4-disconnected so the component detector sees
 the intended objects. Synthetic association only; not ARC task accuracy.
 """
 from __future__ import annotations
