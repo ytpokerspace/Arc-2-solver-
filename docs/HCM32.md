@@ -130,7 +130,7 @@ Implemented in arc_r2/hcm32.py:
 
 - Fixed 32-region and 128-subregion catalog.
 - Typed knowledge nodes and cross-level graph edges.
-- Declarative procedure records and inverse references.
+- Declarative procedure records and inverse references.\n- A deterministic HCM32Runtime with a whitelist of trusted REFLECT, ROTATE, and TRANSPOSE operators.\n- Verified-only procedure execution and exact-fit selection with ambiguity abstention.
 - Evidence records and evidence-gated status transitions.
 - Combinatorial candidate records.
 - Procedure application history and reuse counters.
@@ -140,14 +140,14 @@ Not yet implemented:
 
 - Automatic concept extraction or quadrant assignment.
 - Similarity computation or graph traversal ranking.
-- DSL execution, inverse derivation, or proof generation.
+- Automatic inverse derivation or proof generation.
 - Candidate combination search or automatic memory compression.
 - Integration with HMSE or the active ARC solver.
 - Recursive hierarchy expansion beyond the initial 128 subregions.
 
 Those are later stages. This prototype first establishes stable storage semantics and tests.
 
-## 6. Tests
+## 6. Runtime execution and selection\n\n`HCM32Runtime` executes only explicitly registered trusted operators; persisted procedure records remain declarative and are never evaluated as code. The built-in v1 operators are REFLECT (`left-right` or `top-bottom`), ROTATE (one, two, or three clockwise quarter-turns), and TRANSPOSE. Inputs must be non-empty rectangular grids. Unknown operators, constraints, or malformed parameters fail closed.\n\nSelection examines only procedures with verified status attached to a knowledge node. It returns a procedure only when exactly one candidate reproduces the demonstration output; zero matches or multiple matches return `None`. Application does not itself promote a procedure or record success: the caller must compare against an independently established expected output, then attach evidence and record the outcome.\n\n## 7. Tests
 
 Run:
 
