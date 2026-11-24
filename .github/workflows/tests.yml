@@ -35,6 +35,20 @@ jobs:
           --candidate-cap 1500
           --max-depth 2
           --output arc_hmse_spatial_demo.json
+      - name: Run shared Shape Radar + HMSE rule selector
+        run: >-
+          python -m arc_r2.hmse_rule_selector
+          --task-json tests/fixtures/arc_agi2_00d62c1b_train.json
+          --task-json tests/fixtures/arc_agi2_d89b689b_train.json
+          --candidate-cap 1500
+          --max-depth 2
+          --output arc_hmse_selector_report.json
+      - name: Upload shared HMSE rule selector report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-hmse-shared-rule-selector
+          path: arc_hmse_selector_report.json
+          if-no-files-found: error
       - name: Upload reproducible spatial HMSE demonstration report
         uses: actions/upload-artifact@v4
         with:
