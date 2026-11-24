@@ -1,9 +1,9 @@
-"""Training-pair identity-association check on ARC-AGI-2 task d89b689b.
+"""Compare index-order and semantic identity on ARC-AGI-2 training pairs.
 
-This uses only the task's published training input/output pairs. The four
-single-cell marker objects retain unique colors while moving into a 2x2
-destination; the 2x2 anchor itself is expected to be unmatched. This measures
-component association only, not ARC task solving or held-out generalization.
+Uses only the published training split for task d89b689b. Ground-truth
+correspondence is established by unique marker colors preserved from each
+input to its output. This measures component association, not ARC grid-solving
+accuracy or held-out generalization.
 """
 from __future__ import annotations
 
@@ -24,6 +24,24 @@ DEFAULT_FIXTURE = (
 ANCHOR_COLOR = 8
 
 
+def _metrics(predicted: dict[str, int], expected: dict[str, int]) -> dict:
+    correct = sum(predicted.get(object_id) == index
+                  for object_id, index in expected.items())
+    incorrect = sum(
+        object_id in predicted and predicted[object_id] != index
+        for object_id, index in expected.items()
+    )
+    assigned = len(predicted)
+    return {
+        "expected_matches": len(expected),
+        "assigned": assigned,
+        "correct_matches": correct,
+        "incorrect_assignments": incorrect,
+        "abstentions": len(expected) - assigned,
+        "match_rate": correct / len(expected) if expected else 0.0,
+    }
+
+
 def run_training_pair_experiment(task_json: Path = DEFAULT_FIXTURE) -> dict:
     task = json.loads(Path(task_json).read_text(encoding="utf-8"))
     if task.get("split") != "training":
@@ -32,7 +50,16 @@ def run_training_pair_experiment(task_json: Path = DEFAULT_FIXTURE) -> dict:
         raise ValueError("this experiment is scoped to task d89b689b")
 
     pair_reports = []
-    total_expected = total_correct = total_incorrect = total_abstained = 0
+    totals = {
+        "baseline_index_order": {
+            "expected_matches": 0, "assigned": 0, "correct_matches": 0,
+            "incorrect_assignments": 0, "abstentions": 0,
+        },
+        "semantic_identity": {
+            "expected_matches": 0, "assigned": 0, "correct_matches": 0,
+            "incorrect_assignments": 0, "abstentions": 0,
+        },
+    }
     total_unmatched_anchor = 0
 
     for pair_index, pair in enumerate(task["train"]):
@@ -74,64 +101,93 @@ def run_training_pair_experiment(task_json: Path = DEFAULT_FIXTURE) -> dict:
                 "the four marker colors"
             )
 
-        result = match_identities(reference, target_grid)
-        predicted = {
-            match.object_id: match.target_index for match in result.matches
+        # Baseline control: preserve the original deterministic detection
+        # indices and assume index i in the output is the same object as index
+        # i in the input. If the output has fewer components, missing indices
+        # are abstentions rather than fabricated matches.
+        baseline_predicted = {
+            object_id: reference_index
+            for reference_index, (object_id, obj) in enumerate(reference.objects)
+            if obj.color != ANCHOR_COLOR and reference_index < len(targets)
         }
-        correct = sum(predicted.get(oid) == index for oid, index in expected.items())
-        incorrect = sum(
-            oid in predicted and predicted[oid] != index
-            for oid, index in expected.items()
-        )
-        abstained = len(expected) - len(predicted)
-        unmatched_anchor = sum(oid in result.unmatched_reference for oid in anchors)
+        baseline_metrics = _metrics(baseline_predicted, expected)
 
-        total_expected += len(expected)
-        total_correct += correct
-        total_incorrect += incorrect
-        total_abstained += abstained
+        semantic_result = match_identities(reference, target_grid)
+        semantic_predicted = {
+            match.object_id: match.target_index
+            for match in semantic_result.matches
+        }
+        semantic_metrics = _metrics(semantic_predicted, expected)
+        unmatched_anchor = sum(
+            object_id in semantic_result.unmatched_reference for object_id in anchors
+        )
+
+        for name, metrics in (
+            ("baseline_index_order", baseline_metrics),
+            ("semantic_identity", semantic_metrics),
+        ):
+            for key in totals[name]:
+                totals[name][key] += metrics[key]
+
         total_unmatched_anchor += unmatched_anchor
         pair_reports.append({
             "pair_index": pair_index,
-            "expected_matches": len(expected),
-            "correct_matches": correct,
-            "incorrect_assignments": incorrect,
-            "abstentions": abstained,
+            "baseline_index_order": baseline_metrics,
+            "semantic_identity": semantic_metrics,
+            "semantic_ambiguous_reference": list(semantic_result.ambiguous_reference),
+            "semantic_unmatched_reference": list(semantic_result.unmatched_reference),
+            "semantic_unmatched_target": list(semantic_result.unmatched_target),
             "anchor_unmatched": unmatched_anchor,
-            "ambiguous_reference": list(result.ambiguous_reference),
         })
 
+    for metrics in totals.values():
+        metrics["match_rate"] = (
+            metrics["correct_matches"] / metrics["expected_matches"]
+            if metrics["expected_matches"] else 0.0
+        )
+
+    semantic = totals["semantic_identity"]
+    baseline = totals["baseline_index_order"]
     payload = {
-        "benchmark_type": "arc_agi2_training_pair_identity_association",
+        "benchmark_type": "arc_agi2_training_pair_index_vs_semantic_identity",
         "task_id": task["task_id"],
         "source_repository": task.get("source_repository"),
         "source_revision": task.get("source_revision"),
         "split": task["split"],
         "training_pairs": len(pair_reports),
-        "expected_matches": total_expected,
-        "correct_matches": total_correct,
-        "incorrect_assignments": total_incorrect,
-        "abstentions": total_abstained,
+        "comparison": totals,
+        # Backward-compatible semantic summary fields.
+        "expected_matches": semantic["expected_matches"],
+        "correct_matches": semantic["correct_matches"],
+        "incorrect_assignments": semantic["incorrect_assignments"],
+        "abstentions": semantic["abstentions"],
         "unmatched_anchor_objects": total_unmatched_anchor,
-        "match_rate": total_correct / total_expected if total_expected else 0.0,
+        "match_rate": semantic["match_rate"],
         "passed": (
-            total_expected == 12
-            and total_correct == total_expected
-            and total_incorrect == 0
-            and total_abstained == 0
+            semantic["expected_matches"] == 12
+            and semantic["correct_matches"] == semantic["expected_matches"]
+            and semantic["incorrect_assignments"] == 0
+            and semantic["abstentions"] == 0
             and total_unmatched_anchor == len(pair_reports)
         ),
+        "baseline_index_order": baseline,
+        "semantic_identity": semantic,
         "ground_truth_rule": (
             "Each of the four single-cell markers has a unique color preserved "
             "from input to output; the output component of that color is its "
             "training-pair correspondence. The 2x2 color-8 anchor is not a "
             "persistent output object."
         ),
+        "baseline_rule": (
+            "Assign each input marker the same detection index in the output; "
+            "indices beyond the output component count are counted as abstentions."
+        ),
         "arc_task_accuracy_claim": False,
         "held_out_test_data_used": False,
         "note": (
-            "Real ARC-AGI-2 training-pair component association only. This does "
-            "not evaluate output-grid prediction, test split performance, or "
+            "Same three ARC-AGI-2 training pairs are evaluated by both index-order "
+            "and semantic identity association. This measures component matching "
+            "only, not output-grid prediction, held-out test performance, or "
             "independent-task generalization."
         ),
         "pair_reports": pair_reports,
@@ -155,15 +211,22 @@ def main() -> None:
     if args.output:
         args.output.write_text(rendered + "\n", encoding="utf-8")
     if args.summary:
+        baseline = report["baseline_index_order"]
+        semantic = report["semantic_identity"]
         lines = [
-            "# ARC-AGI-2 training-pair identity association",
+            "# ARC-AGI-2 training-pair identity comparison",
             "",
             f"- Task: `{report['task_id']}`",
             f"- Training pairs: {report['training_pairs']}",
-            f"- Correct associations: {report['correct_matches']}/{report['expected_matches']}",
-            f"- Incorrect assignments: {report['incorrect_assignments']}",
-            f"- Abstentions: {report['abstentions']}",
-            f"- Unmatched anchor objects: {report['unmatched_anchor_objects']}",
+            "",
+            "| Method | Correct | Incorrect | Abstentions | Match rate |",
+            "|---|---:|---:|---:|---:|",
+            f"| Index-order baseline | {baseline['correct_matches']}/{baseline['expected_matches']} | "
+            f"{baseline['incorrect_assignments']} | {baseline['abstentions']} | {baseline['match_rate']:.2%} |",
+            f"| Semantic identity | {semantic['correct_matches']}/{semantic['expected_matches']} | "
+            f"{semantic['incorrect_assignments']} | {semantic['abstentions']} | {semantic['match_rate']:.2%} |",
+            "",
+            f"- Unmatched anchor objects under semantic identity: {report['unmatched_anchor_objects']}",
             f"- Result: {'PASS' if report['passed'] else 'FAIL'}",
             "",
             report["note"],
