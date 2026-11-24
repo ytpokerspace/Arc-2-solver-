@@ -121,6 +121,22 @@ class HCM32MemoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.memory.set_candidate_status("CB-1", "validated")
 
+    def test_node_and_connection_promotion_requires_evidence(self):
+        self.memory.add_node("KN-A", "concept", "A", ["Q01"])
+        self.memory.add_node("KN-B", "concept", "B", ["Q02.S01"])
+        self.memory.add_connection(
+            "CN-A-B", {"kind": "node", "id": "KN-A"},
+            {"kind": "node", "id": "KN-B"}, "similar",
+        )
+        with self.assertRaises(ValueError):
+            self.memory.set_connection_status("CN-A-B", "verified")
+        self.memory.add_evidence("EV-N", "node", "KN-A", "training_fit", "passed")
+        self.memory.set_node_status("KN-A", "supported")
+        self.memory.add_evidence("EV-C", "connection", "CN-A-B", "transfer_test", "passed")
+        self.memory.set_connection_status("CN-A-B", "verified")
+        self.assertEqual(self.memory.data["nodes"]["KN-A"]["status"], "supported")
+        self.assertEqual(self.memory.data["connections"]["CN-A-B"]["status"], "verified")
+
     def test_failed_application_is_preserved_without_erasing_success(self):
         self._reflection_procedure()
         self.memory.record_application("PR-REFLECT-H", "passed")
