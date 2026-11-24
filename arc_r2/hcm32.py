@@ -188,6 +188,63 @@ class HCM32Memory:
             for key, record in raw["candidates"].items():
                 if not isinstance(record, dict) or record.get("candidate_id") != key:
                     raise HCM32FormatError(f"invalid candidate record: {key}")
+
+            # Validate all evidence links and evidence-gated statuses after every
+            # collection has been loaded, so references may be stored in any order.
+            collections = {
+                "node": raw["nodes"], "connection": raw["connections"],
+                "procedure": raw["procedures"], "candidate": raw["candidates"],
+            }
+            for evidence_id, evidence in raw["evidence"].items():
+                if evidence.get("result") not in EVIDENCE_RESULTS:
+                    raise HCM32FormatError(f"invalid evidence result: {evidence_id}")
+                subject_type = evidence.get("subject_type")
+                subject_id = evidence.get("subject_id")
+                if subject_type not in collections or subject_id not in collections[subject_type]:
+                    raise HCM32FormatError(f"invalid evidence subject: {evidence_id}")
+                subject = collections[subject_type][subject_id]
+                if evidence_id not in subject.get("evidence_refs", []):
+                    raise HCM32FormatError(f"evidence is not linked from its subject: {evidence_id}")
+
+            def require_result(record: Mapping[str, Any], result: str, label: str) -> None:
+                refs = record.get("evidence_refs", [])
+                if not isinstance(refs, list) or any(ref not in raw["evidence"] for ref in refs):
+                    raise HCM32FormatError(f"invalid evidence references in {label}")
+                if not any(raw["evidence"][ref].get("result") == result for ref in refs):
+                    raise HCM32FormatError(f"{label} status requires {result} evidence")
+
+            for key, record in raw["nodes"].items():
+                status = record.get("status")
+                if status not in NODE_STATUSES:
+                    raise HCM32FormatError(f"invalid node status: {key}")
+                if status in {"supported", "verified"}:
+                    require_result(record, "passed", f"node {key}")
+                elif status == "rejected":
+                    require_result(record, "failed", f"node {key}")
+            for key, record in raw["connections"].items():
+                status = record.get("status")
+                if status not in CONNECTION_STATUSES:
+                    raise HCM32FormatError(f"invalid connection status: {key}")
+                if status in {"supported", "verified"}:
+                    require_result(record, "passed", f"connection {key}")
+                elif status == "rejected":
+                    require_result(record, "failed", f"connection {key}")
+            for key, record in raw["procedures"].items():
+                status = record.get("status")
+                if status not in PROCEDURE_STATUSES:
+                    raise HCM32FormatError(f"invalid procedure status: {key}")
+                if status in {"tested", "verified"}:
+                    require_result(record, "passed", f"procedure {key}")
+                elif status == "deprecated":
+                    require_result(record, "failed", f"procedure {key}")
+            for key, record in raw["candidates"].items():
+                status = record.get("status")
+                if status not in CANDIDATE_STATUSES:
+                    raise HCM32FormatError(f"invalid candidate status: {key}")
+                if status == "validated":
+                    require_result(record, "passed", f"candidate {key}")
+                elif status == "rejected":
+                    require_result(record, "failed", f"candidate {key}")
             return raw
         except HCM32FormatError:
             raise
