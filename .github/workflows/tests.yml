@@ -29,15 +29,19 @@ jobs:
           name: semantic-identity-preflight
           path: semantic_identity_experiment.json
           if-no-files-found: error
-      - name: Run semantic identity stress matrix
-        run: >-
-          python -m arc_r2.semantic_identity_stress
-          --output semantic_identity_stress.json
-      - name: Upload semantic identity stress matrix
+      - name: Run semantic identity stress matrix and publish summary
+        run: |
+          python -m arc_r2.semantic_identity_stress \
+            --output semantic_identity_stress.json \
+            --summary semantic_identity_stress.md
+          cat semantic_identity_stress.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload semantic identity stress matrix reports
         uses: actions/upload-artifact@v4
         with:
           name: semantic-identity-stress-matrix
-          path: semantic_identity_stress.json
+          path: |
+            semantic_identity_stress.json
+            semantic_identity_stress.md
           if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
