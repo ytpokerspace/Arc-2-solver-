@@ -4,7 +4,7 @@
 
 HCM-32 is a separate, persistent knowledge-memory layer for ARC-R2. Its 32 stable primary regions organize concepts; a sparse typed graph links concepts and regions across any family or hierarchy level; declarative DSL procedures preserve reusable methods; evidence records distinguish hypotheses from demonstrated results.
 
-HCM-32 does not change the active solver, HMSE selector, or SingleStageMemory. The latter remains an exact-training-problem cache. HCM-32 is a standalone prototype until its tests and later transfer experiments justify integration.
+HCM-32 does not change the HMSE selector or SingleStageMemory. The latter remains an exact-training-problem cache. An opt-in bridge now connects a narrow, verified subset of HCM-32 geometry procedures to the primitive benchmark; the default solver path remains unchanged.
 
 ## 1. Region catalog
 
@@ -142,7 +142,7 @@ Not yet implemented:
 - Similarity computation or graph traversal ranking.
 - Automatic inverse derivation or proof generation.
 - Candidate combination search or automatic memory compression.
-- Integration with HMSE or the active ARC solver.
+- Automatic integration with HMSE or the default active ARC solver path. The primitive benchmark has a separate opt-in bridge for a limited geometry subset.
 - Recursive hierarchy expansion beyond the initial 128 subregions.
 
 Those are later stages. This prototype first establishes stable storage semantics and tests.
@@ -163,3 +163,14 @@ python -m unittest discover -s tests -v
 ```
 
 Acceptance focuses on catalog counts, cross-level references, duplicate/invalid IDs, persistence, evidence-gated promotion, preservation of failed applications, and corrupt-file rejection. Passing these tests validates the memory data structures, not ARC generalization or solver accuracy.
+
+
+## 8. Opt-in ARC primitive benchmark bridge
+
+`arc_r2/hcm32_bridge.py` connects HCM-32 to the primitive benchmark without modifying the `SingleStageMemory` implementation or storage format. It maps only four existing primitive forms to the HCM-32 DSL: `FLIP_H`, `FLIP_V`, `ROTATE` (quarter turns 1–3), and `TRANSPOSE`. Unsupported primitives are not stored.
+
+Enable it with `--hcm32-memory hcm32-memory.json`. On each fold, the bridge checks verified procedures attached to geometry-region nodes and requires exactly one procedure to reproduce every visible fit pair. Zero matches or multiple matches abstain and the existing primitive search runs normally. A successful HCM-32 retrieval skips primitive enumeration for that fold. The report records HCM-32 hits separately from SingleStageMemory hits.
+
+Newly discovered exact-fit procedures are queued during leave-one-training-pair-out evaluation and persisted only after all fold predictions are complete. This prevents a procedure learned in one fold from being used to predict another fold's held-out pair in the same run. The learned procedure is verified only against the fit pairs that produced it; future tasks must still pass the all-fit-pairs exact-match gate before reuse.
+
+The bridge is opt-in. Without `--hcm32-memory`, the default benchmark behavior is unchanged. This limited integration does not establish autonomous rule discovery, general ARC generalization, or benchmark-wide accuracy improvement.
