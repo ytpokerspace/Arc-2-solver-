@@ -89,5 +89,58 @@ class HCM32BridgeTests(unittest.TestCase):
                                 for row in report["fold_results"]))
 
 
+    def test_cross_task_geometry_transfer_after_independent_memory_reload(self):
+        """Learn reflection on task A; reuse it on different task B after reload."""
+        source_task = {
+            "task_id": "source-horizontal-reflection",
+            "train": [
+                {"input": [[1, 2, 3], [4, 5, 6]],
+                 "output": [[3, 2, 1], [6, 5, 4]]},
+                {"input": [[8, 0], [2, 9], [5, 4]],
+                 "output": [[0, 8], [9, 2], [4, 5]]},
+            ],
+        }
+        target_task = {
+            "task_id": "held-out-cross-task-reflection",
+            "train": [
+                {"input": [[7, 1, 4, 2], [3, 8, 0, 6], [5, 9, 2, 1]],
+                 "output": [[2, 4, 1, 7], [6, 0, 8, 3], [1, 2, 9, 5]]},
+                {"input": [[6, 3], [1, 8], [4, 0], [9, 2]],
+                 "output": [[3, 6], [8, 1], [0, 4], [2, 9]]},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_path = root / "source-task.json"
+            target_path = root / "target-task.json"
+            memory_path = root / "persistent-hcm32.json"
+            source_path.write_text(json.dumps([source_task]), encoding="utf-8")
+            target_path.write_text(json.dumps([target_task]), encoding="utf-8")
+
+            # Phase 1: learn only from a separate source task.
+            source_report = run_benchmark(
+                source_path, limit=1, candidate_cap=1500, max_depth=1,
+                hcm32_memory_path=memory_path,
+            )
+            self.assertEqual(source_report["hcm32_memory_hits"], 0)
+            self.assertGreaterEqual(source_report["hcm32_memory_saves"], 1)
+
+            # Phase 2: create a fresh bridge instance and evaluate a distinct task.
+            baseline = run_benchmark(
+                target_path, limit=1, candidate_cap=1500, max_depth=1,
+            )
+            transferred = run_benchmark(
+                target_path, limit=1, candidate_cap=1500, max_depth=1,
+                hcm32_memory_path=memory_path,
+            )
+            self.assertEqual(transferred["hcm32_memory_hits"], 2)
+            self.assertEqual(transferred["held_out_exact"], baseline["held_out_exact"])
+            self.assertEqual(transferred["held_out_exact"], 2)
+            self.assertTrue(all(row["candidates_evaluated"] == 0
+                                for row in transferred["fold_results"]))
+            self.assertTrue(all(row["held_out_exact"]
+                                for row in transferred["fold_results"]))
+
+
 if __name__ == "__main__":
     unittest.main()
