@@ -1,16 +1,13 @@
-"""Evidence-driven selection between known ARC rule families.
+"""Evidence-driven selection between registered ARC rule families.
 
-The selector is not told which task family it is evaluating. It proposes every
-registered family, checks each proposal against every visible training pair,
-and selects only when exactly one family has an exact fit. Zero or multiple
-fits are reported as unresolved rather than guessed.
+The selector receives visible training pairs, not a task-family label. It
+selects only one uniquely exact-fitting family and abstains otherwise.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -18,9 +15,10 @@ from .hmse import (
     MethodRegistry, MethodSpec, Procedure, SearchPartition, Stage,
     ValidationResult, execute_procedure,
 )
+from .hmse_reflection_rule import propose_reflection
+from .hmse_spatial_demo import SpatialProgram
 from .primitives import Primitive, Program, as_grid, background_color, fit_program
 from .shape_radar import scan_grid
-from .hmse_spatial_demo import SpatialProgram
 
 
 @dataclass(frozen=True)
@@ -50,12 +48,8 @@ class PredictionOutcome:
 def _hole_fill_candidate(pairs, scans) -> RuleCandidate:
     if len(scans) != len(pairs):
         return RuleCandidate("hole-fill", None, False, "perception-count-mismatch", len(pairs))
-    hole_objects = sum(
-        1 for scan in scans for obj in scan["objects"] if obj["holes"] > 0
-    )
-    if hole_objects == 0:
+    if not any(obj["holes"] > 0 for scan in scans for obj in scan["objects"]):
         return RuleCandidate("hole-fill", None, False, "no-enclosed-shapes-observed", len(pairs))
-
     added_colors = set()
     for source, target in pairs:
         if len(source) != len(target) or len(source[0]) != len(target[0]):
@@ -69,7 +63,6 @@ def _hole_fill_candidate(pairs, scans) -> RuleCandidate:
                     return RuleCandidate("hole-fill", None, False, "existing-foreground-changed", len(pairs))
     if len(added_colors) != 1:
         return RuleCandidate("hole-fill", None, False, "added-color-not-unique", len(pairs))
-
     program = Program((Primitive("FILL_HOLES", (next(iter(added_colors)),)),))
     try:
         exact = all(program.apply(source) == target for source, target in pairs)
@@ -92,17 +85,21 @@ def _spatial_candidate(pairs) -> RuleCandidate:
     return RuleCandidate("anchor-quadrant-relocation", program, True, "exact-fit", len(pairs))
 
 
+def _reflection_candidate(pairs) -> RuleCandidate:
+    program, reason = propose_reflection(pairs)
+    return RuleCandidate("reflection", program, program is not None, reason, len(pairs))
+
+
 def _scan_training_pairs(state: Mapping[str, Any], params: Mapping[str, Any]):
-    return tuple(scan_grid(source, connectivity=4)
-                 for source, _ in state["training_pairs"])
+    return tuple(scan_grid(source, connectivity=4) for source, _ in state["training_pairs"])
 
 
 def _select_rule(state: Mapping[str, Any], params: Mapping[str, Any]):
-    pairs = tuple((as_grid(source), as_grid(target))
-                  for source, target in state["training_pairs"])
+    pairs = tuple((as_grid(source), as_grid(target)) for source, target in state["training_pairs"])
     candidates = (
         _hole_fill_candidate(pairs, state["perception"]),
         _spatial_candidate(pairs),
+        _reflection_candidate(pairs),
     )
     accepted = tuple(candidate for candidate in candidates if candidate.accepted)
     if len(accepted) == 1:
@@ -160,7 +157,7 @@ def build_procedure():
             ), requires=("selection", "held_out_input"),
                validator_id="selector.accept-prediction", max_evaluations=1),
         ),
-        description="Perceive, evaluate all registered rule families, select a unique exact fit, predict.",
+        description="Perceive, evaluate registered rule families, select a unique exact fit, predict.",
         input_keys=("training_pairs", "held_out_input"),
     )
 
@@ -184,7 +181,6 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
     baseline_exact = baseline_candidates = 0
     selected_exact = selected_count = ambiguous_count = unresolved_count = 0
     baseline_runtime = selector_runtime = 0.0
-
     for held_index, (held_input, held_output) in enumerate(pairs):
         fit_pairs = tuple(pair for i, pair in enumerate(pairs) if i != held_index)
         started = time.perf_counter()
@@ -193,8 +189,6 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
         baseline_runtime += time.perf_counter() - started
         baseline_match = baseline_prediction == held_output
         baseline_exact += int(baseline_match)
-        baseline_candidates += baseline.candidates_evaluated
-
         started = time.perf_counter()
         execution = execute_procedure(
             build_procedure(),
@@ -204,12 +198,9 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
         selector_runtime += time.perf_counter() - started
         selection: SelectionOutcome = execution.state["selection"]
         prediction: PredictionOutcome = execution.state["prediction"]
-        if selection.selected_rule is not None:
-            selected_count += 1
-        if selection.status == "ambiguous-multiple-exact-fits":
-            ambiguous_count += 1
-        elif selection.status == "no-rule-family-exact-fit":
-            unresolved_count += 1
+        selected_count += int(selection.selected_rule is not None)
+        ambiguous_count += int(selection.status == "ambiguous-multiple-exact-fits")
+        unresolved_count += int(selection.status == "no-rule-family-exact-fit")
         match = prediction.prediction == held_output
         selected_exact += int(match)
         folds.append({
@@ -236,7 +227,6 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
                 for stage in execution.stages
             ],
         })
-
     return {
         "task_id": str(task.get("task_id", "unknown")),
         "dataset": {"repository": task.get("source_repository"),
@@ -245,14 +235,14 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
         "protocol": "leave-one-training-pair-out",
         "training_pairs": len(pairs),
         "held_out_outputs_visible_to_selector": False,
-        "rule_families": ["hole-fill", "anchor-quadrant-relocation"],
+        "rule_families": ["hole-fill", "anchor-quadrant-relocation", "reflection"],
         "baseline": {"exact": baseline_exact, "folds": len(folds),
                      "candidate_evaluations": baseline_candidates,
                      "runtime_seconds": round(baseline_runtime, 6)},
         "selector": {"exact": selected_exact, "folds": len(folds),
                      "selected": selected_count, "ambiguous": ambiguous_count,
                      "unresolved": unresolved_count,
-                     "candidate_family_checks": 2 * len(folds),
+                     "candidate_family_checks": 3 * len(folds),
                      "runtime_seconds": round(selector_runtime, 6)},
         "fold_results": folds,
     }
@@ -263,7 +253,7 @@ def run_suite(tasks, candidate_cap: int = 1500, max_depth: int = 2):
     total_folds = sum(item["selector"]["folds"] for item in reports)
     total_exact = sum(item["selector"]["exact"] for item in reports)
     return {
-        "schema": "arc-hmse-shared-rule-selector/v1",
+        "schema": "arc-hmse-shared-rule-selector/v2",
         "protocol": "leave-one-training-pair-out",
         "task_count": len(reports),
         "total_folds": total_folds,
@@ -271,9 +261,10 @@ def run_suite(tasks, candidate_cap: int = 1500, max_depth: int = 2):
         "selector_accuracy": total_exact / total_folds if total_folds else 0.0,
         "tasks": reports,
         "interpretation_limits": [
-            "Only two authored rule families are registered; this is not open-ended ARC rule discovery.",
+            "Only three authored rule families are registered; this is not open-ended ARC rule discovery.",
+            "The reflection case is a controlled synthetic fixture, not an ARC-AGI benchmark task.",
             "The selector chooses only a unique exact fit; ambiguous or unsupported cases remain unresolved.",
-            "Folds are correlated examples from two tasks, not independent benchmark tasks.",
+            "Folds are correlated examples within each task, not independent benchmark tasks.",
             "Baseline and selector candidate counts measure different search spaces and are not an efficiency comparison.",
         ],
     }
