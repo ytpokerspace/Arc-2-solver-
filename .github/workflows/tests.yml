@@ -74,6 +74,22 @@ jobs:
             semantic_identity_arc_fixture.json
             semantic_identity_arc_fixture.md
           if-no-files-found: error
+      - name: Run 250 same-color shape-based identity trials
+        run: |
+          python -m arc_r2.semantic_identity_same_color \
+            --seed 20261125 \
+            --trials 250 \
+            --output semantic_identity_same_color.json \
+            --summary semantic_identity_same_color.md
+          cat semantic_identity_same_color.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload same-color identity reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-same-color
+          path: |
+            semantic_identity_same_color.json
+            semantic_identity_same_color.md
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
