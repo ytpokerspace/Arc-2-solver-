@@ -71,6 +71,14 @@ class HCM32MemoryTests(unittest.TestCase):
             "dependency",
         )
         self.assertEqual(node_region_edge["target"]["kind"], "region")
+        self.assertEqual(
+            [node["node_id"] for node in self.memory.nodes_in_region("Q22")],
+            ["KN-REFLECTION"],
+        )
+        self.assertEqual(
+            [node["node_id"] for node in self.memory.nodes_in_region("Q22.S02")],
+            ["KN-REFLECTION"],
+        )
         self.assertEqual(len(self.memory.connections_for(
             {"kind": "node", "id": "KN-REFLECTION"})), 2)
 
