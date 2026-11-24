@@ -72,6 +72,52 @@ def _case(reference_objects: tuple[GridObject, ...], target_objects: tuple[GridO
     }
 
 
+def _scenario_passed(name: str, case: dict) -> bool:
+    checks = {
+        "far_relocation_rotation_order_change": (
+            case["correct"] == 3 and case["incorrect_assignments"] == 0
+            and case["abstained"] == 0
+        ),
+        "repeated_identical_objects": (
+            case["assigned"] == 0 and len(case["ambiguous_reference"]) == 2
+            and case["incorrect_assignments"] == 0
+        ),
+        "one_missing_object": (
+            case["correct"] == 2 and case["expected_unmatched_reference"] == 1
+            and case["incorrect_assignments"] == 0
+        ),
+        "one_new_object": (
+            case["correct"] == 2 and len(case["unmatched_target"]) == 1
+            and case["incorrect_assignments"] == 0
+        ),
+    }
+    return checks[name]
+
+
+def _render_summary(report: dict) -> str:
+    lines = [
+        "# Semantic identity stress matrix",
+        "",
+        f"**Overall:** {'PASS' if report['passed'] else 'FAIL'}",
+        "",
+        "| Scenario | Result | Correct | Incorrect | Abstained |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for name, case in report["scenarios"].items():
+        lines.append(
+            f"| {name} | {'PASS' if case['passed'] else 'FAIL'} | "
+            f"{case['correct']} | {case['incorrect_assignments']} | {case['abstained']} |"
+        )
+    lines.extend([
+        "",
+        f"Failed scenarios: {', '.join(report['failed_scenarios']) or 'none'}",
+        "",
+        "> Synthetic object-association tests only. This report does not measure ARC task accuracy or generalization.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
 def run_stress_matrix() -> dict:
     l_shape = ((0, 0), (0, 1), (1, 0))
     domino = ((0, 0), (0, 1))
@@ -101,10 +147,15 @@ def run_stress_matrix() -> dict:
             {1: 2, 2: 1},
         ),
     }
-    return {
+    for name, case in cases.items():
+        case["passed"] = _scenario_passed(name, case)
+    failed = [name for name, case in cases.items() if not case["passed"]]
+    report = {
         "benchmark_type": "synthetic_semantic_identity_stress_matrix",
         "arc_task_accuracy_claim": False,
         "scenario_count": len(cases),
+        "passed": not failed,
+        "failed_scenarios": failed,
         "scenarios": cases,
         "pass_criteria": {
             "far_relocation_rotation_order_change": "3 correct; 0 incorrect; 0 abstained",
@@ -114,17 +165,23 @@ def run_stress_matrix() -> dict:
         },
         "note": "Synthetic object association only; no ARC task accuracy or generalization claim.",
     }
+    return report
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--summary", type=Path)
     args = parser.parse_args()
     report = run_stress_matrix()
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
         args.output.write_text(rendered, encoding="utf-8")
+    if args.summary:
+        args.summary.write_text(_render_summary(report), encoding="utf-8")
     print(rendered)
+    if not report["passed"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
