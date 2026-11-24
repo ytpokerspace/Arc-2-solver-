@@ -29,6 +29,11 @@ on:
         description: "Number of public ARC-AGI-2 tasks for the task-disjoint HCM-32 transfer experiment"
         required: false
         default: "1000"
+      run_official_evaluation:
+        description: "Run the full 120-task ARC-AGI-2 evaluation-input prediction pass (no labels or solver memory)"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -97,3 +102,54 @@ jobs:
           name: arc-r2-predictive-mcts-benchmark
           path: arc_r2_predictive_mcts_benchmark.json
           if-no-files-found: warn
+
+  official-evaluation:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_official_evaluation == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out ARC-R2 solver
+        uses: actions/checkout@v4
+      - name: Check out pinned official ARC-AGI-2 dataset
+        uses: actions/checkout@v4
+        with:
+          repository: arcprize/ARC-AGI-2
+          ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
+          path: arc-agi-2-data
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Predict on every official evaluation input (labels untouched)
+        run: >-
+          python -m arc_r2.evaluation_benchmark
+          --dataset arc-agi-2-data/data/evaluation
+          --candidate-cap 1500
+          --max-depth 2
+          --output arc_r2_evaluation_predictions.json
+          --report arc_r2_evaluation_report.json
+      - name: Publish evaluation coverage summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          report = json.load(open("arc_r2_evaluation_report.json", encoding="utf-8"))
+          lines = [
+              "## ARC-AGI-2 official evaluation inputs",
+              f"- Tasks: {report['task_count']}",
+              f"- Test inputs: {report['test_input_count']}",
+              f"- Predictions: {report['predictions_produced']}",
+              f"- Abstentions: {report['abstentions']}",
+              "- Accuracy: not measured; test labels are not present/read.",
+              "- Semantic identity: not integrated into this baseline.",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\\n".join(lines) + "\\n")
+          PY
+      - name: Upload blind evaluation predictions and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-official-evaluation-input-predictions
+          path: |
+            arc_r2_evaluation_predictions.json
+            arc_r2_evaluation_report.json
+          if-no-files-found: error
