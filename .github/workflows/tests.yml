@@ -19,6 +19,16 @@ jobs:
         run: python -m compileall -q arc_r2 tests
       - name: Unit and integration tests
         run: python -m unittest discover -s tests -v
+      - name: Run controlled semantic identity preflight
+        run: >-
+          python -m arc_r2.semantic_identity_experiment
+          --output semantic_identity_experiment.json
+      - name: Upload semantic identity preflight report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-preflight
+          path: semantic_identity_experiment.json
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
