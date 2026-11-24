@@ -75,9 +75,6 @@ class HmseEvidenceCurveTests(unittest.TestCase):
         self.assertEqual(observed, expected)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_extra_consistent_example_does_not_reveal_hidden_exception(self):
         # Synthetic adversarial control: A and B support left-right reflection;
         # C is a hidden top-bottom exception. This is not an ARC task score.
@@ -124,3 +121,7 @@ if __name__ == "__main__":
             }
 
         self.assertEqual(observed, expected)
+
+
+if __name__ == "__main__":
+    unittest.main()
