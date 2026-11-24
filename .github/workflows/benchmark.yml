@@ -7,18 +7,28 @@ on:
       - "arc_r2/predictive_mcts.py"
       - "arc_r2/predictive_mcts_benchmark.py"
       - "arc_r2/primitive_benchmark.py"
+      - "arc_r2/hcm32.py"
+      - "arc_r2/hcm32_bridge.py"
+      - "arc_r2/hcm32_transfer_benchmark.py"
       - ".github/workflows/benchmark.yml"
   pull_request:
     paths:
       - "arc_r2/primitives.py"
       - "arc_r2/primitive_benchmark.py"
+      - "arc_r2/hcm32.py"
+      - "arc_r2/hcm32_bridge.py"
+      - "arc_r2/hcm32_transfer_benchmark.py"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       task_limit:
-        description: "Number of public ARC-AGI-2 training tasks"
+        description: "Number of public ARC-AGI-2 training tasks for the existing benchmarks"
         required: false
         default: "20"
+      transfer_task_limit:
+        description: "Number of public ARC-AGI-2 tasks for the task-disjoint HCM-32 transfer experiment"
+        required: false
+        default: "1000"
 permissions:
   contents: read
 jobs:
@@ -55,6 +65,25 @@ jobs:
         with:
           name: arc-r2-primitive-benchmark
           path: arc_r2_primitive_benchmark.json
+          if-no-files-found: warn
+
+      - name: Run task-disjoint HCM-32 transfer benchmark
+        env:
+          TRANSFER_TASK_LIMIT: ${{ github.event.inputs.transfer_task_limit || '1000' }}
+        run: >-
+          python -m arc_r2.hcm32_transfer_benchmark
+          --dataset arc-agi-2-data/data/training
+          --limit "$TRANSFER_TASK_LIMIT"
+          --max-depth 1
+          --candidate-cap 1500
+          --memory hcm32_transfer_memory.json
+          --output arc_r2_hcm32_transfer_benchmark.json
+      - name: Upload task-disjoint HCM-32 transfer report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-hcm32-task-disjoint-transfer
+          path: arc_r2_hcm32_transfer_benchmark.json
           if-no-files-found: warn
 
       - name: Run predictive pair-matching MCTS benchmark
