@@ -13,10 +13,10 @@ class SemanticIdentityTests(unittest.TestCase):
         )
         target_grid = (
             (0,0,0,0,0,0,0,0,0),
-            (0,0,0,0,0,0,0,1,0),
-            (0,0,0,0,0,0,0,0,0),
             (0,2,2,0,0,0,0,0,0),
             (0,2,0,0,0,0,0,0,0),
+            (0,0,0,0,0,0,0,0,0),
+            (0,0,0,0,0,0,0,1,0),
         )
         ref = IdentityObjectProgram.initialize(reference_grid)
         result = match_identities(ref, target_grid)
