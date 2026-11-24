@@ -29,6 +29,16 @@ jobs:
           name: semantic-identity-preflight
           path: semantic_identity_experiment.json
           if-no-files-found: error
+      - name: Run semantic identity stress matrix
+        run: >-
+          python -m arc_r2.semantic_identity_stress
+          --output semantic_identity_stress.json
+      - name: Upload semantic identity stress matrix
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-stress-matrix
+          path: semantic_identity_stress.json
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
