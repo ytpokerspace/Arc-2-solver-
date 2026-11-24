@@ -45,6 +45,7 @@ class HmseRuleSelectorTests(unittest.TestCase):
             "train": [
                 {"input": [[1, 0], [0, 0]], "output": [[0, 1], [0, 0]]},
                 {"input": [[0, 2], [0, 0]], "output": [[0, 0], [2, 0]]},
+                {"input": [[1, 0, 0], [0, 0, 2]], "output": [[2, 0, 0], [0, 0, 1]]},
             ],
         }
         report = run_task(task, candidate_cap=100, max_depth=1)
