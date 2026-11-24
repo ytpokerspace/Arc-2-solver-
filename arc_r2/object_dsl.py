@@ -45,6 +45,28 @@ class ObjectInstruction:
         if self.operation == "REFLECT" and self.axis not in {"horizontal", "vertical"}:
             raise ValueError("axis must be horizontal or vertical")
 
+    def inverse(self) -> "ObjectInstruction":
+        """Return the exact algebraic inverse for supported reversible operations.
+
+        SCALE and PLACE are not generally invertible because their inputs are
+        discarded. Object indices are resolved against each intermediate grid,
+        so callers must still validate the reversed program on their examples.
+        """
+        if self.operation == "MOVE":
+            return ObjectInstruction(
+                "MOVE", self.object_index,
+                delta_row=-self.delta_row, delta_col=-self.delta_col,
+            )
+        if self.operation == "ROTATE90":
+            return ObjectInstruction(
+                "ROTATE90", self.object_index, turns=(-self.turns) % 4,
+            )
+        if self.operation == "REFLECT":
+            return ObjectInstruction(
+                "REFLECT", self.object_index, axis=self.axis,
+            )
+        raise ValueError(f"{self.operation} has no general inverse")
+
     def canonical(self) -> tuple:
         return (self.operation, self.object_index, self.factor, self.turns,
                 self.axis, self.delta_row, self.delta_col, self.top, self.left)
@@ -76,6 +98,15 @@ class ObjectProgram:
 
     def then(self, instruction: ObjectInstruction) -> "ObjectProgram":
         return ObjectProgram(self.instructions + (instruction,))
+
+    def inverse(self) -> "ObjectProgram":
+        """Reverse instruction order and invert each supported operation.
+
+        This is an algebraic candidate, not a guarantee for every multi-object
+        grid: object indices are re-detected after each step. Validate by
+        applying the candidate to the relevant outputs before trusting it.
+        """
+        return ObjectProgram(tuple(item.inverse() for item in reversed(self.instructions)))
 
     def apply(self, grid: Grid) -> Grid:
         result = as_grid(grid)
