@@ -105,6 +105,68 @@ class HCM32ObjectDSLBridgeTests(unittest.TestCase):
             self.assertEqual(predicted, unseen_expected)
             self.assertEqual(match[1].inverse().apply(predicted), unseen)
 
+    def test_rotation_reflection_composition_with_multiple_objects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "memory.json"
+            source = (
+                (0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 1, 0, 0, 0, 0, 0, 0),
+                (0, 1, 1, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 2, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0),
+            )
+            program = ObjectProgram((
+                ObjectInstruction("ROTATE90", 0, turns=1),
+                ObjectInstruction("REFLECT", 0, axis="horizontal"),
+            ))
+            expected = program.apply(source)
+            self.assertEqual(program.inverse().apply(expected), source)
+
+            bridge = HCM32ObjectDSLBridge(path)
+            procedure_id = bridge.store_program(program, ((source, expected),))
+            self.assertIsNotNone(procedure_id)
+
+            restored = HCM32ObjectDSLBridge(path)
+            match = restored.find_program(((source, expected),))
+            self.assertIsNotNone(match)
+            self.assertEqual(match[1].canonical(), program.canonical())
+
+            unseen = (
+                (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 0, 3, 0, 0, 0, 0, 0, 0),
+                (0, 0, 3, 3, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 4, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            )
+            unseen_expected = program.apply(unseen)
+            predicted = restored.runtime.apply_procedure(procedure_id, unseen)
+            self.assertEqual(predicted, unseen_expected)
+            self.assertEqual(match[1].inverse().apply(predicted), unseen)
+
+    def test_multi_object_reordering_exposes_index_based_inverse_limit(self):
+        source = (
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 2, 0, 0, 0, 0, 0),
+            (0, 0, 0, 2, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+        )
+        # The first move sends object 0 to the right of object 1. Since
+        # detect_objects sorts by bounding box, the old object 1 becomes index 0.
+        program = ObjectProgram((
+            ObjectInstruction("MOVE", 0, delta_col=5),
+            ObjectInstruction("ROTATE90", 0, turns=1),
+        ))
+        result = program.apply(source)
+        # The algebraic inverse retains numeric indices. After re-detection,
+        # index 0 still names the left-hand object, so the reverse MOVE targets
+        # the wrong object and fails closed at the grid boundary.
+        with self.assertRaises(ValueError):
+            program.inverse().apply(result)
+
     def test_inverse_rejects_operations_without_a_general_inverse(self):
         for instruction in (
             ObjectInstruction("SCALE", 0, factor=2),
