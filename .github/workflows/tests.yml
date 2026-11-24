@@ -27,6 +27,20 @@ jobs:
           --candidate-cap 1500
           --max-depth 2
           --output arc_hmse_demo.json
+
+      - name: Run pinned spatial Shape Radar + HMSE ARC demonstration
+        run: >-
+          python -m arc_r2.hmse_spatial_demo
+          --task-json tests/fixtures/arc_agi2_d89b689b_train.json
+          --candidate-cap 1500
+          --max-depth 2
+          --output arc_hmse_spatial_demo.json
+      - name: Upload reproducible spatial HMSE demonstration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-hmse-spatial-demo-task-d89b689b
+          path: arc_hmse_spatial_demo.json
+          if-no-files-found: error
       - name: Upload reproducible HMSE demonstration report
         uses: actions/upload-artifact@v4
         with:
