@@ -44,7 +44,7 @@ the selector receives no held-out output.
 
 ## Limits
 
-Only three authored rule families are registered. This is evidence-based
+Only four authored rule families are registered. This is evidence-based
 selection among known candidates, not open-ended rule invention. Folds from
 the same task are correlated and must not be counted as independent tasks.
 Baseline candidate counts and selector family checks are different search

@@ -182,11 +182,12 @@ automatic rule discovery.
 
 ## Shared rule selector: choose from training evidence
 
-The selector evaluates three registered rule families (hole-filling,
-anchor-quadrant relocation, and reflection) against visible training pairs.
-It selects only a unique exact fit; unsupported or ambiguous cases remain
-unresolved. The third reflection fixture is synthetic and is explicitly not
-counted as an ARC-AGI task.
+The selector evaluates four registered rule families (hole-filling,
+anchor-quadrant relocation, reflection, and Latin-square completion) against
+visible training pairs. It selects only a unique exact fit; unsupported or
+ambiguous cases remain unresolved. The reflection fixture is synthetic and is
+explicitly not counted as an ARC-AGI task. The Latin-square fixture is a fourth,
+pinned public ARC-AGI-2 training task and contains no test data.
 
 ```bash
 python -m arc_r2.hmse_rule_selector \
