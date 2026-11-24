@@ -47,7 +47,7 @@ class HCM32ReflectionTransferExperiment(unittest.TestCase):
                 (1, 0, 0),
                 (2, 3, 0),
             )
-            task_a_output = reflect_left_right(task_a_input)
+            task_a_output = ((0, 0, 1), (0, 3, 2))
             memory = HCM32Memory(path)
             memory.add_node(
                 "KN-REFLECT-LR",
@@ -102,7 +102,7 @@ class HCM32ReflectionTransferExperiment(unittest.TestCase):
                 (8, 0, 9, 1),
                 (2, 3, 4, 5),
             )
-            expected_b = reflect_left_right(task_b_input)
+            expected_b = ((7, 6, 5, 4), (1, 9, 0, 8), (5, 4, 3, 2))
 
             # Preconditions are checked before execution.
             self.assertTrue(task_b_input and task_b_input[0])
