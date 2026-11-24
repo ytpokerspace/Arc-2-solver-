@@ -221,5 +221,5 @@ corrupt or incompatible memory files fail closed.
 See [docs/HCM32.md](docs/HCM32.md). Run the focused tests with:
 
 ```bash
-python -m unittest tests.test_hcm32 -v
+python -m unittest discover -s tests -p 'test_hcm32.py' -v
 ```
