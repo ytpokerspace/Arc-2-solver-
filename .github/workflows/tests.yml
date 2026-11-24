@@ -43,6 +43,22 @@ jobs:
             semantic_identity_stress.json
             semantic_identity_stress.md
           if-no-files-found: error
+      - name: Run 250 seeded randomized identity trials
+        run: |
+          python -m arc_r2.semantic_identity_randomized \
+            --seed 20261124 \
+            --trials 250 \
+            --output semantic_identity_randomized.json \
+            --summary semantic_identity_randomized.md
+          cat semantic_identity_randomized.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload randomized identity reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-identity-randomized
+          path: |
+            semantic_identity_randomized.json
+            semantic_identity_randomized.md
+          if-no-files-found: error
       - name: Run pinned Shape Radar + HMSE ARC demonstration
         run: >-
           python -m arc_r2.hmse_demo
