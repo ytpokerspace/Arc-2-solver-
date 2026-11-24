@@ -54,7 +54,7 @@ def _position_similarity(a: GridObject, b: GridObject, a_size: tuple[int, int], 
     return max(0.0, 1.0 - hypot(ar - br, ac - bc) / 2**0.5)
 
 def _appearance_score(a: GridObject, b: GridObject) -> float:
-    """Score identity evidence that does not depend on location."""
+    """Score location-free appearance with rotation-invariant aspect evidence."""
     color = 1.0 if a.color == b.color else 0.0
     shape = _shape_similarity(a, b)
     size = _ratio_similarity(a.size, b.size)
