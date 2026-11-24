@@ -152,7 +152,7 @@ Those are later stages. This prototype first establishes stable storage semantic
 Run:
 
 ```bash
-python -m unittest tests.test_hcm32 -v
+python -m unittest discover -s tests -p 'test_hcm32.py' -v
 python -m unittest discover -s tests -v
 ```
 
