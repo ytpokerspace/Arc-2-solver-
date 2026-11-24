@@ -53,6 +53,67 @@ class HCM32ObjectDSLBridgeTests(unittest.TestCase):
             self.assertEqual(predicted, unseen_expected)
             self.assertEqual(restored.memory.data["procedures"][procedure_id]["status"], "verified")
 
+    def test_composed_program_persists_transfers_and_inverts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "memory.json"
+            source = (
+                (0, 0, 0, 0, 0),
+                (0, 1, 0, 0, 0),
+                (0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0),
+            )
+            expected = (
+                (0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0),
+                (0, 0, 1, 0, 0),
+                (0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0),
+            )
+            program = ObjectProgram((
+                ObjectInstruction("MOVE", 0, delta_col=1),
+                ObjectInstruction("MOVE", 0, delta_row=1),
+            ))
+            self.assertEqual(program.inverse().apply(expected), source)
+
+            bridge = HCM32ObjectDSLBridge(path)
+            procedure_id = bridge.store_program(program, ((source, expected),))
+            self.assertIsNotNone(procedure_id)
+
+            restored = HCM32ObjectDSLBridge(path)
+            match = restored.find_program(((source, expected),))
+            self.assertIsNotNone(match)
+            self.assertEqual(match[1].canonical(), program.canonical())
+
+            unseen = (
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 2, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+            )
+            unseen_expected = (
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+                (0, 0, 0, 2, 0, 0),
+                (0, 0, 0, 0, 0, 0),
+            )
+            predicted = restored.runtime.apply_procedure(procedure_id, unseen)
+            self.assertEqual(predicted, unseen_expected)
+            self.assertEqual(match[1].inverse().apply(predicted), unseen)
+
+    def test_inverse_rejects_operations_without_a_general_inverse(self):
+        for instruction in (
+            ObjectInstruction("SCALE", 0, factor=2),
+            ObjectInstruction("PLACE", 0, top=1, left=1),
+        ):
+            with self.subTest(operation=instruction.operation):
+                with self.assertRaises(ValueError):
+                    instruction.inverse()
+
     def test_does_not_store_program_that_fails_training_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
             bridge = HCM32ObjectDSLBridge(Path(directory) / "memory.json")
