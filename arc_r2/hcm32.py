@@ -236,8 +236,8 @@ class HCM32Memory:
             raise ValueError("node_id must start with KN-")
         if node_id in self.data["nodes"]:
             raise ValueError(f"duplicate node_id: {node_id}")
-        if status not in NODE_STATUSES:
-            raise ValueError("invalid node status")
+        if status != "hypothesis":
+            raise ValueError("new nodes start as hypotheses; use set_node_status after recording evidence")
         if not isinstance(quadrant_refs, list) or not quadrant_refs:
             raise ValueError("quadrant_refs must be a non-empty list")
         if any(ref not in REGIONS for ref in quadrant_refs):
@@ -261,8 +261,8 @@ class HCM32Memory:
             raise ValueError(f"duplicate connection_id: {connection_id}")
         if relationship_type not in RELATION_TYPES:
             raise ValueError("unsupported relationship_type")
-        if status not in CONNECTION_STATUSES:
-            raise ValueError("invalid connection status")
+        if status != "hypothesis":
+            raise ValueError("new connections start as hypotheses; use set_connection_status after evidence")
         src, dst = _validate_endpoint(source), _validate_endpoint(target)
         for endpoint in (src, dst):
             if endpoint["kind"] == "node" and endpoint["id"] not in self.data["nodes"]:
@@ -298,6 +298,8 @@ class HCM32Memory:
             "evidence_refs": list(evidence_refs or []), "reuse_successes": 0,
             "reuse_failures": 0, "version": 1,
         }
+        if status != "draft":
+            raise ValueError("new procedures start as drafts; use set_procedure_status after evidence")
         self._validate_procedure_record(record, self.data["procedures"])
         self.data["procedures"][procedure_id] = record
         return record
@@ -342,28 +344,28 @@ class HCM32Memory:
         if node_id not in self.data["nodes"] or status not in NODE_STATUSES:
             raise ValueError("unknown node or invalid status")
         if status in {"supported", "verified"}:
-            self._require_passed_evidence(self.data["nodes"][node_id], self.data["evidence"])
+            self._require_evidence_result(self.data["nodes"][node_id], self.data["evidence"], "passed")
         self.data["nodes"][node_id]["status"] = status
 
     def set_connection_status(self, connection_id: str, status: str) -> None:
         if connection_id not in self.data["connections"] or status not in CONNECTION_STATUSES:
             raise ValueError("unknown connection or invalid status")
         if status in {"supported", "verified"}:
-            self._require_passed_evidence(self.data["connections"][connection_id], self.data["evidence"])
+            self._require_evidence_result(self.data["connections"][connection_id], self.data["evidence"], "passed")
         self.data["connections"][connection_id]["status"] = status
 
     def set_procedure_status(self, procedure_id: str, status: str) -> None:
         if procedure_id not in self.data["procedures"] or status not in PROCEDURE_STATUSES:
             raise ValueError("unknown procedure or invalid status")
         if status == "verified":
-            self._require_passed_evidence(self.data["procedures"][procedure_id], self.data["evidence"])
+            self._require_evidence_result(self.data["procedures"][procedure_id], self.data["evidence"], "passed")
         self.data["procedures"][procedure_id]["status"] = status
 
     def set_candidate_status(self, candidate_id: str, status: str) -> None:
         if candidate_id not in self.data["candidates"] or status not in CANDIDATE_STATUSES:
             raise ValueError("unknown candidate or invalid status")
         if status == "validated":
-            self._require_passed_evidence(self.data["candidates"][candidate_id], self.data["evidence"])
+            self._require_evidence_result(self.data["candidates"][candidate_id], self.data["evidence"], "passed")
         self.data["candidates"][candidate_id]["status"] = status
 
     def add_candidate(
@@ -378,8 +380,8 @@ class HCM32Memory:
             raise ValueError("candidate must reference existing procedures")
         if not operation_sequence or any(pid not in input_procedures for pid in operation_sequence):
             raise ValueError("operation_sequence must be a non-empty ordered subset of input_procedures")
-        if status not in CANDIDATE_STATUSES:
-            raise ValueError("invalid candidate status")
+        if status != "generated":
+            raise ValueError("new candidates start as generated; use set_candidate_status after evidence")
         record = {
             "candidate_id": candidate_id, "input_procedures": list(input_procedures),
             "operation_sequence": list(operation_sequence),
