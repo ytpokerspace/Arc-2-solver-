@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from arc_r2.hmse_rule_selector import _select_rule
+from arc_r2.primitives import as_grid
 from arc_r2.shape_radar import scan_grid
 
 
@@ -35,7 +36,7 @@ class HmseEvidenceCurveTests(unittest.TestCase):
         )
         self.task = json.loads(fixture.read_text(encoding="utf-8"))
         self.pairs = tuple(
-            (pair["input"], pair["output"])
+            (as_grid(pair["input"]), as_grid(pair["output"]))
             for pair in self.task["train"]
         )
 
