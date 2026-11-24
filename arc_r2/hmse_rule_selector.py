@@ -17,6 +17,7 @@ from .hmse import (
     ValidationResult, execute_procedure,
 )
 from .hmse_reflection_rule import propose_reflection
+from .hmse_latin_square_rule import propose_latin_square_completion
 from .hmse_spatial_demo import SpatialProgram
 from .primitives import Primitive, Program, as_grid, background_color, fit_program
 from .shape_radar import scan_grid
@@ -91,6 +92,11 @@ def _reflection_candidate(pairs) -> RuleCandidate:
     return RuleCandidate("reflection", program, program is not None, reason, len(pairs))
 
 
+def _latin_square_candidate(pairs) -> RuleCandidate:
+    program, reason = propose_latin_square_completion(pairs)
+    return RuleCandidate("latin-square-completion", program, program is not None, reason, len(pairs))
+
+
 def _scan_training_pairs(state: Mapping[str, Any], params: Mapping[str, Any]):
     return tuple(scan_grid(source, connectivity=4) for source, _ in state["training_pairs"])
 
@@ -101,6 +107,7 @@ def _select_rule(state: Mapping[str, Any], params: Mapping[str, Any]):
         _hole_fill_candidate(pairs, state["perception"]),
         _spatial_candidate(pairs),
         _reflection_candidate(pairs),
+        _latin_square_candidate(pairs),
     )
     accepted = tuple(candidate for candidate in candidates if candidate.accepted)
     if len(accepted) == 1:
@@ -236,14 +243,14 @@ def run_task(task: Mapping[str, Any], candidate_cap: int = 1500, max_depth: int 
         "protocol": "leave-one-training-pair-out",
         "training_pairs": len(pairs),
         "held_out_outputs_visible_to_selector": False,
-        "rule_families": ["hole-fill", "anchor-quadrant-relocation", "reflection"],
+        "rule_families": ["hole-fill", "anchor-quadrant-relocation", "reflection", "latin-square-completion"],
         "baseline": {"exact": baseline_exact, "folds": len(folds),
                      "candidate_evaluations": baseline_candidates,
                      "runtime_seconds": round(baseline_runtime, 6)},
         "selector": {"exact": selected_exact, "folds": len(folds),
                      "selected": selected_count, "ambiguous": ambiguous_count,
                      "unresolved": unresolved_count,
-                     "candidate_family_checks": 3 * len(folds),
+                     "candidate_family_checks": 4 * len(folds),
                      "runtime_seconds": round(selector_runtime, 6)},
         "fold_results": folds,
     }
@@ -254,7 +261,7 @@ def run_suite(tasks, candidate_cap: int = 1500, max_depth: int = 2):
     total_folds = sum(item["selector"]["folds"] for item in reports)
     total_exact = sum(item["selector"]["exact"] for item in reports)
     return {
-        "schema": "arc-hmse-shared-rule-selector/v2",
+        "schema": "arc-hmse-shared-rule-selector/v3",
         "protocol": "leave-one-training-pair-out",
         "task_count": len(reports),
         "total_folds": total_folds,
@@ -262,8 +269,9 @@ def run_suite(tasks, candidate_cap: int = 1500, max_depth: int = 2):
         "selector_accuracy": total_exact / total_folds if total_folds else 0.0,
         "tasks": reports,
         "interpretation_limits": [
-            "Only three authored rule families are registered; this is not open-ended ARC rule discovery.",
+            "Only four authored rule families are registered; this is not open-ended ARC rule discovery.",
             "The reflection case is a controlled synthetic fixture, not an ARC-AGI benchmark task.",
+            "The Latin-square family is evaluated on one pinned public training task only.",
             "The selector chooses only a unique exact fit; ambiguous or unsupported cases remain unresolved.",
             "Folds are correlated examples within each task, not independent benchmark tasks.",
             "Baseline and selector candidate counts measure different search spaces and are not an efficiency comparison.",
