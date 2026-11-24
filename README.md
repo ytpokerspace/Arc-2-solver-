@@ -66,3 +66,24 @@ Search budgets can be set with `--primitive-candidate-cap`, `--primitive-max-dep
 - Catalog size, executable operator count, candidate count, and solved-task count are different measurements.
 - Public training-pair validation, test-input predictions, and official evaluation results must be reported separately.
 - No claim is made that this prototype solves ARC-AGI-2.
+
+## Shape Radar + HMSE demonstration
+
+A pinned, single-task ARC-AGI-2 demonstration integrates Shape Radar with the
+Hierarchical Method Synthesis Engine and compares the result with the existing
+primitive-fitting baseline. It uses training-only data and leave-one-training-
+pair-out validation.
+
+See [docs/HMSE_ARC_DEMO.md](docs/HMSE_ARC_DEMO.md) for the protocol and run:
+
+```bash
+python -m arc_r2.hmse_demo \
+  --task-json tests/fixtures/arc_agi2_00d62c1b_train.json \
+  --candidate-cap 1500 \
+  --max-depth 2 \
+  --output arc_hmse_demo.json
+```
+
+This is a single-task integration demonstration, not an ARC benchmark score.
+The HMSE schedule is authored for the demonstration; automatic schedule
+invention and general ARC rule induction are not claimed.
