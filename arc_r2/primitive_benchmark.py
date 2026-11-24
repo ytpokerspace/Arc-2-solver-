@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .hcm32_bridge import HCM32Bridge
 from .primitives import as_grid, fit_program
 
 
@@ -28,10 +29,13 @@ def load_tasks(path: Path, limit: int) -> list[dict[str, Any]]:
 
 
 def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
-                  max_depth: int = 2, memory_path: Path | None = None) -> dict[str, Any]:
+                  max_depth: int = 2, memory_path: Path | None = None,
+                  hcm32_memory_path: Path | None = None) -> dict[str, Any]:
     tasks = load_tasks(dataset, limit)
     folds = []
     skipped = []
+    pending_hcm32 = []
+    hcm32 = HCM32Bridge(hcm32_memory_path) if hcm32_memory_path else None
     started = time.perf_counter()
     for task_index, task in enumerate(tasks):
         task_id = str(task.get("task_id", task_index))
@@ -46,14 +50,35 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
         for held_index, (held_input, held_output) in enumerate(checked):
             print(f"[FOLD] task={task_id} held_out={held_index + 1}/{len(checked)}", flush=True)
             fit_pairs = tuple(pair for i, pair in enumerate(checked) if i != held_index)
-            result = fit_program(fit_pairs, candidate_cap=candidate_cap, max_depth=max_depth,
-                                  memory_path=str(memory_path) if memory_path else None)
+            hcm_match = hcm32.find_program(fit_pairs) if hcm32 else None
+            if hcm_match is not None:
+                program = hcm_match.program
+                fit_exact = True
+                fit_program_count = 1
+                candidates_evaluated = 0
+                single_stage_memory_hit = False
+                single_stage_memory_saved = False
+                hcm32_memory_hit = True
+            else:
+                result = fit_program(fit_pairs, candidate_cap=candidate_cap, max_depth=max_depth,
+                                     memory_path=str(memory_path) if memory_path else None)
+                program = result.program
+                fit_exact = result.exact_fit
+                fit_program_count = result.fit_program_count
+                candidates_evaluated = result.candidates_evaluated
+                single_stage_memory_hit = result.memory_hit
+                single_stage_memory_saved = result.memory_saved
+                hcm32_memory_hit = False
+                if hcm32 and result.exact_fit and result.program is not None:
+                    # Defer writes until every fold has been evaluated. A rule
+                    # learned in one fold must not leak into another fold.
+                    pending_hcm32.append((result.program, fit_pairs))
             prediction = None
             exact = False
             error = None
-            if result.program is not None:
+            if program is not None:
                 try:
-                    prediction = result.program.apply(held_input)
+                    prediction = program.apply(held_input)
                     exact = prediction == held_output
                 except (ValueError, TypeError, IndexError) as exc:
                     error = f"{type(exc).__name__}: {exc}"
@@ -61,17 +86,28 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
                 "task_id": task_id,
                 "held_out_training_pair": held_index,
                 "fit_pairs": len(fit_pairs),
-                "program": str(result.program) if result.program else None,
-                "fit_exact": result.exact_fit,
-                "fit_program_count": result.fit_program_count,
-                "candidates_evaluated": result.candidates_evaluated,
-                "single_stage_memory_hit": result.memory_hit,
-                "single_stage_memory_saved": result.memory_saved,
+                "program": str(program) if program else None,
+                "fit_exact": fit_exact,
+                "fit_program_count": fit_program_count,
+                "candidates_evaluated": candidates_evaluated,
+                "single_stage_memory_hit": single_stage_memory_hit,
+                "single_stage_memory_saved": single_stage_memory_saved,
+                "hcm32_memory_hit": hcm32_memory_hit,
                 "held_out_exact": exact,
                 "prediction": [list(row) for row in prediction] if prediction is not None else None,
                 "expected": [list(row) for row in held_output],
                 "error": error,
             })
+    # Persist newly learned procedures only after all predictions are fixed.
+    # This prevents cross-validation folds from training on one another's holdouts.
+    hcm32_saved = 0
+    if hcm32:
+        seen = set()
+        for program, examples in pending_hcm32:
+            procedure_id = hcm32.store_program(program, examples)
+            if procedure_id is not None and procedure_id not in seen:
+                seen.add(procedure_id)
+                hcm32_saved += 1
     elapsed = time.perf_counter() - started
     exact = sum(row["held_out_exact"] for row in folds)
     fit = sum(row["fit_exact"] for row in folds)
@@ -92,6 +128,9 @@ def run_benchmark(dataset: Path, limit: int = 20, candidate_cap: int = 5000,
         "single_stage_memory_path": str(memory_path) if memory_path else None,
         "single_stage_memory_hits": sum(row["single_stage_memory_hit"] for row in folds),
         "single_stage_memory_saves": sum(row["single_stage_memory_saved"] for row in folds),
+        "hcm32_memory_path": str(hcm32_memory_path) if hcm32_memory_path else None,
+        "hcm32_memory_hits": sum(row["hcm32_memory_hit"] for row in folds),
+        "hcm32_memory_saves": hcm32_saved,
         "max_depth": max_depth,
         "runtime_seconds": round(elapsed, 6),
         "scope": "leave-one-training-pair-out cross-validation; official test arrays are never read",
@@ -107,6 +146,8 @@ def main(argv=None) -> int:
     parser.add_argument("--max-depth", type=int, choices=(0, 1, 2), default=2)
     parser.add_argument("--memory", type=Path, default=None,
                         help="optional persistent single-stage exact-fit memory JSON file")
+    parser.add_argument("--hcm32-memory", type=Path, default=None,
+                        help="optional HCM-32 procedural memory JSON file (separate from --memory)")
     parser.add_argument("--output", type=Path, default=Path("arc_r2_primitive_benchmark.json"))
     args = parser.parse_args(argv)
     if not args.dataset.exists() or not (args.dataset.is_file() or args.dataset.is_dir()):
@@ -115,7 +156,8 @@ def main(argv=None) -> int:
         parser.error("limit must be in 1..500")
     if not 1 <= args.candidate_cap <= 50000:
         parser.error("candidate-cap must be in 1..50000")
-    report = run_benchmark(args.dataset, args.limit, args.candidate_cap, args.max_depth, args.memory)
+    report = run_benchmark(args.dataset, args.limit, args.candidate_cap, args.max_depth,
+                           args.memory, args.hcm32_memory)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("ARC-R2 PRIMITIVE BENCHMARK | MCTS: OFF | BEAM: OFF | TEST ANSWERS: UNUSED")
     print(f"Tasks: {report['eligible_tasks']}/{report['tasks_considered']} eligible")
@@ -124,6 +166,8 @@ def main(argv=None) -> int:
     print(f"Folds with an exact fit program: {report['fit_folds_with_exact_program']}/{report['folds']}")
     print(f"Single-stage memory: {report['single_stage_memory_hits']} hits, "
           f"{report['single_stage_memory_saves']} saves")
+    print(f"HCM-32 memory: {report['hcm32_memory_hits']} hits, "
+          f"{report['hcm32_memory_saves']} saved procedures")
     print(f"Runtime: {report['runtime_seconds']:.3f}s")
     print(f"[SAVED] {args.output}")
     return 0
