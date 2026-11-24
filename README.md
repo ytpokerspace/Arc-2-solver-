@@ -134,3 +134,24 @@ new ARC rules; that is the next integration layer. Run its tests with
 - No claim that the system has solved ARC-AGI-2.
 
 The existing experimental modules remain in the repository for historical comparison, but the primitive benchmark and its workflow do not import or execute them.
+
+## Shape Radar + HMSE demonstration
+
+A pinned, single-task ARC-AGI-2 demonstration integrates Shape Radar with the
+Hierarchical Method Synthesis Engine and compares the result with the existing
+primitive-fitting baseline. It uses training-only data and leave-one-training-
+pair-out validation.
+
+See [docs/HMSE_ARC_DEMO.md](docs/HMSE_ARC_DEMO.md) for the protocol and run:
+
+```bash
+python -m arc_r2.hmse_demo \
+  --task-json tests/fixtures/arc_agi2_00d62c1b_train.json \
+  --candidate-cap 1500 \
+  --max-depth 2 \
+  --output arc_hmse_demo.json
+```
+
+This is a single-task integration demonstration, not an ARC benchmark score.
+The HMSE schedule is authored for the demonstration; automatic schedule
+invention and general ARC rule induction are not claimed.
