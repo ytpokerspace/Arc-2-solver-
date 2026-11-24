@@ -116,7 +116,7 @@ class HCM32Bridge:
         procedure_id = "PR-ARC-" + digest
         node_id = "KN-ARC-" + digest
         if procedure_id in self.memory.data["procedures"]:
-            return procedure_id
+            return None
         fingerprint = _fingerprint(pairs)
         self.memory.add_procedure(
             procedure_id,
