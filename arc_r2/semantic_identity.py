@@ -58,7 +58,11 @@ def _appearance_score(a: GridObject, b: GridObject) -> float:
     color = 1.0 if a.color == b.color else 0.0
     shape = _shape_similarity(a, b)
     size = _ratio_similarity(a.size, b.size)
-    # Compare rotation-invariant aspect ratios: a 90-degree rotation swaps\n    # width and height but must not make the same object look less similar.\n    a_aspect = min(a.width, a.height) / max(a.width, a.height)\n    b_aspect = min(b.width, b.height) / max(b.width, b.height)\n    aspect = _ratio_similarity(a_aspect, b_aspect)
+    # Compare rotation-invariant aspect ratios: a 90-degree rotation swaps
+    # width and height but must not make the same object look less similar.
+    a_aspect = min(a.width, a.height) / max(a.width, a.height)
+    b_aspect = min(b.width, b.height) / max(b.width, b.height)
+    aspect = _ratio_similarity(a_aspect, b_aspect)
     return 0.30 * color + 0.35 * shape + 0.15 * size + 0.10 * aspect
 
 def _score(a: GridObject, b: GridObject, a_size: tuple[int, int], b_size: tuple[int, int]) -> float:
