@@ -10,6 +10,12 @@ class SemanticIdentityStressTests(unittest.TestCase):
         self.assertEqual(report["scenario_count"], 4)
         self.assertFalse(report["arc_task_accuracy_claim"])
 
+    def test_all_scenarios_pass_their_acceptance_gates(self):
+        report = run_stress_matrix()
+        self.assertTrue(report["passed"], report["failed_scenarios"])
+        self.assertEqual(report["failed_scenarios"], [])
+        self.assertTrue(all(case["passed"] for case in report["scenarios"].values()))
+
     def test_far_relocation_rotation_and_order_change(self):
         case = run_stress_matrix()["scenarios"]["far_relocation_rotation_order_change"]
         self.assertEqual(case["correct"], 3)
