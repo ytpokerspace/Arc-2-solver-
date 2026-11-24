@@ -14,7 +14,7 @@ from arc_r2.hmse_rule_selector import (
 class HmseAdversarialSelectionTests(unittest.TestCase):
     def setUp(self):
         self.state = {
-            "training_pairs": (((1, 0), (1, 1)),),
+            "training_pairs": ((((1, 0),), ((1, 1),)),),
             "perception": (),
         }
 
