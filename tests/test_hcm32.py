@@ -46,7 +46,7 @@ class HCM32MemoryTests(unittest.TestCase):
         )
         self.memory.add_node(
             "KN-SYMMETRY", "visual_concept", "bilateral symmetry",
-            ["Q06.S01"], status="supported",
+            ["Q06.S01"], status="hypothesis",
         )
         edge = self.memory.add_connection(
             "CN-1",
