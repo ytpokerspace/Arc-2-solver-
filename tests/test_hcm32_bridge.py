@@ -141,6 +141,50 @@ class HCM32BridgeTests(unittest.TestCase):
             self.assertTrue(all(row["held_out_exact"]
                                 for row in transferred["fold_results"]))
 
+    def test_task_disjoint_transfer_benchmark_freezes_source_memory(self):
+        from arc_r2.hcm32_transfer_benchmark import run_transfer_benchmark
+
+        source_task = {
+            "task_id": "source-task-A",
+            "train": [
+                {"input": [[1, 2, 3], [4, 5, 6]],
+                 "output": [[3, 2, 1], [6, 5, 4]]},
+                {"input": [[8, 0], [2, 9], [5, 4]],
+                 "output": [[0, 8], [9, 2], [4, 5]]},
+            ],
+        }
+        target_task = {
+            "task_id": "target-task-B",
+            "train": [
+                {"input": [[7, 1, 4, 2], [3, 8, 0, 6], [5, 9, 2, 1]],
+                 "output": [[2, 4, 1, 7], [6, 0, 8, 3], [1, 2, 9, 5]]},
+                {"input": [[6, 3], [1, 8], [4, 0], [9, 2]],
+                 "output": [[3, 6], [8, 1], [0, 4], [2, 9]]},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dataset = root / "tasks.json"
+            dataset.write_text(json.dumps([source_task, target_task]), encoding="utf-8")
+            memory_path = root / "frozen-memory.json"
+            report = run_transfer_benchmark(
+                dataset, task_limit=2, candidate_cap=1500, max_depth=1,
+                memory_path=memory_path,
+            )
+
+            self.assertEqual(report["source_task_ids"], ["source-task-A"])
+            self.assertEqual(report["target_task_ids"], ["target-task-B"])
+            self.assertGreaterEqual(report["learned_procedure_count"], 1)
+            self.assertEqual(report["baseline_held_out_exact"], 2)
+            self.assertEqual(report["hcm32_transfer_held_out_exact"], 2)
+            self.assertEqual(report["hcm32_retrieval_hits"], 2)
+            self.assertEqual(report["hcm32_incorrect_retrievals"], 0)
+            self.assertTrue(report["source_memory_unchanged_during_target_evaluation"])
+            self.assertEqual(
+                report["source_memory_sha256_before_target_evaluation"],
+                report["source_memory_sha256_after_target_evaluation"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
