@@ -33,19 +33,20 @@ jobs:
           --candidate-cap 1500
           --max-depth 2
           --output arc_hmse_spatial_demo.json
-      - name: Run three-family Shape Radar + HMSE rule selector
+      - name: Run four-family Shape Radar + HMSE rule selector
         run: >-
           python -m arc_r2.hmse_rule_selector
           --task-json tests/fixtures/arc_agi2_00d62c1b_train.json
           --task-json tests/fixtures/arc_agi2_d89b689b_train.json
           --task-json tests/fixtures/synthetic_reflection_train.json
+          --task-json tests/fixtures/arc_agi2_4cd1b7b2_train.json
           --candidate-cap 1500
           --max-depth 2
           --output arc_hmse_selector_report.json
-      - name: Upload three-family HMSE rule selector report
+      - name: Upload four-family HMSE rule selector report
         uses: actions/upload-artifact@v4
         with:
-          name: arc-hmse-three-family-rule-selector
+          name: arc-hmse-four-family-rule-selector
           path: arc_hmse_selector_report.json
           if-no-files-found: error
       - name: Upload reproducible spatial HMSE demonstration report
