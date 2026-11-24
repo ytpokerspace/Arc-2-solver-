@@ -26,8 +26,10 @@ SAME_COLOR_SHAPES = tuple(SHAPES[index] for index in SHAPE_INDICES)
 OBJECT_COLOR = 1
 
 
-def _rotate(shape, turns: int):
+def _transform(shape, turns: int, reflected: bool):
     points = list(shape)
+    if reflected:
+        points = [(r, -c) for r, c in points]
     for _ in range(turns % 4):
         points = [(c, -r) for r, c in points]
     min_r = min(r for r, _ in points)
@@ -122,7 +124,8 @@ def run_same_color_stress(*, seed: int = 20261125, trials: int = 250) -> dict:
         object_count = rng.randint(2, len(SAME_COLOR_SHAPES))
         reference_shapes = rng.sample(SAME_COLOR_SHAPES, object_count)
         target_shapes = [
-            _rotate(shape, rng.randrange(4)) for shape in reference_shapes
+            _transform(shape, rng.randrange(4), rng.choice((False, True)))
+            for shape in reference_shapes
         ]
         reference_grid = _grid(_random_layout(rng, reference_shapes))
         target_grid = _grid(_random_layout(rng, target_shapes))
