@@ -201,3 +201,25 @@ python -m arc_r2.hmse_rule_selector \
 
 See [docs/HMSE_RULE_SELECTOR.md](docs/HMSE_RULE_SELECTOR.md). This tests
 selection among three authored rule families, not open-ended rule discovery.
+
+
+## HCM-32: hierarchical combinatorial memory prototype
+
+A standalone HCM-32 memory model is available in `arc_r2/hcm32.py`. It defines
+32 primary knowledge regions (eight families with four regions each), 128
+initial subquadrants, and a sparse typed graph that can connect nodes or
+regions across any family and hierarchy level. It stores declarative DSL
+procedures, inverse references, combinatorial candidates, evidence, and
+procedure-use history in versioned JSON.
+
+HCM-32 is intentionally separate from the active solver and the existing
+exact-problem SingleStageMemory cache. It does not yet infer concepts, rank
+graph retrieval, synthesize combinations, execute DSL records, or claim
+cross-task generalization. Knowledge promotion requires recorded evidence;
+corrupt or incompatible memory files fail closed.
+
+See [docs/HCM32.md](docs/HCM32.md). Run the focused tests with:
+
+```bash
+python -m unittest tests.test_hcm32 -v
+```
