@@ -212,13 +212,29 @@ regions across any family and hierarchy level. It stores declarative DSL
 procedures, inverse references, combinatorial candidates, evidence, and
 procedure-use history in versioned JSON.
 
-HCM-32 is intentionally separate from the active solver and the existing
-exact-problem SingleStageMemory cache. It does not yet infer concepts, rank
-graph retrieval, synthesize combinations, execute DSL records, or claim
-cross-task generalization. Knowledge promotion requires recorded evidence;
-corrupt or incompatible memory files fail closed.
+HCM-32 remains a separate procedural-memory layer from the exact-problem
+SingleStageMemory cache. An opt-in bridge in `arc_r2/hcm32_bridge.py` can
+retrieve uniquely matching, verified geometry procedures (horizontal/vertical
+reflection, rotation, transpose) before primitive enumeration. It requires an
+exact match across every visible fit pair and abstains on ambiguity. Newly
+learned procedures are saved only after all folds finish, preventing one
+cross-validation fold from training on another fold's held-out pair. The
+existing SingleStageMemory implementation and file format are unchanged.
 
-See [docs/HCM32.md](docs/HCM32.md). Run the focused tests with:
+Example with both memory layers kept separate:
+
+```bash
+python -m arc_r2.primitive_benchmark \
+  --dataset path/to/ARC-AGI-2/data/training \
+  --memory single-stage-memory.json \
+  --hcm32-memory hcm32-memory.json \
+  --output arc_r2_hcm32_report.json
+```
+
+Only four geometry primitive forms currently map to the HCM-32 DSL. This is
+an opt-in transfer experiment, not evidence of general ARC improvement or
+autonomous rule discovery. See [docs/HCM32.md](docs/HCM32.md). Run the focused
+tests with:
 
 ```bash
 python -m unittest discover -s tests -p 'test_hcm32.py' -v
