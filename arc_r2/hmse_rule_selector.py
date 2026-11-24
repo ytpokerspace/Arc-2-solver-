@@ -18,7 +18,6 @@ from .hmse import (
     MethodRegistry, MethodSpec, Procedure, SearchPartition, Stage,
     ValidationResult, execute_procedure,
 )
-from .hmse_demo import _background_color if False else None
 from .primitives import Primitive, Program, as_grid, background_color, fit_program
 from .shape_radar import scan_grid
 from .hmse_spatial_demo import SpatialProgram
