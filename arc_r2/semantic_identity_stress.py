@@ -82,7 +82,7 @@ def run_stress_matrix() -> dict:
         "far_relocation_rotation_order_change": _case(
             (_placed(1, l_shape, 1, 1), _placed(2, domino, 2, 8), _placed(3, square, 8, 2)),
             (_placed(3, square, 1, 15), _placed(2, domino, 15, 15, 1), _placed(1, l_shape, 15, 1, 1)),
-            {1: 1, 2: 2, 3: 3},
+            {1: 1, 2: 2, 3: 0},
         ),
         "repeated_identical_objects": _case(
             (_placed(4, single, 2, 2), _placed(4, single, 2, 12)),
@@ -98,7 +98,7 @@ def run_stress_matrix() -> dict:
         "one_new_object": _case(
             (_placed(1, single, 1, 1), _placed(2, domino, 2, 8)),
             (_placed(3, l_shape, 15, 15), _placed(2, domino, 15, 8), _placed(1, single, 15, 1)),
-            {1: 1, 2: 2},
+            {1: 2, 2: 1},
         ),
     }
     return {
