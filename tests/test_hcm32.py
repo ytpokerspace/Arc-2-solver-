@@ -64,8 +64,15 @@ class HCM32MemoryTests(unittest.TestCase):
             "dependency",
         )
         self.assertEqual(region_edge["target"]["id"], "Q06")
+        node_region_edge = self.memory.add_connection(
+            "CN-3",
+            {"kind": "node", "id": "KN-REFLECTION"},
+            {"kind": "region", "id": "Q29.S01"},
+            "dependency",
+        )
+        self.assertEqual(node_region_edge["target"]["kind"], "region")
         self.assertEqual(len(self.memory.connections_for(
-            {"kind": "node", "id": "KN-REFLECTION"})), 1)
+            {"kind": "node", "id": "KN-REFLECTION"})), 2)
 
     def test_rejects_unknown_regions_and_nodes(self):
         with self.assertRaises(ValueError):
@@ -152,6 +159,23 @@ class HCM32MemoryTests(unittest.TestCase):
         }), encoding="utf-8")
         with self.assertRaises(HCM32FormatError):
             HCM32Memory(self.path)
+
+    def test_loader_rejects_verified_record_without_evidence(self):
+        self.memory.add_node("KN-A", "concept", "A", ["Q01"])
+        self.memory.save()
+        raw = json.loads(self.path.read_text(encoding="utf-8"))
+        raw["nodes"]["KN-A"]["status"] = "verified"
+        self.path.write_text(json.dumps(raw), encoding="utf-8")
+        with self.assertRaises(HCM32FormatError):
+            HCM32Memory(self.path)
+
+    def test_rejected_status_requires_failed_evidence(self):
+        self.memory.add_node("KN-A", "concept", "A", ["Q01"])
+        with self.assertRaises(ValueError):
+            self.memory.set_node_status("KN-A", "rejected")
+        self.memory.add_evidence("EV-FAIL", "node", "KN-A", "counterexample", "failed")
+        self.memory.set_node_status("KN-A", "rejected")
+        self.assertEqual(self.memory.data["nodes"]["KN-A"]["status"], "rejected")
 
     def test_snapshot_is_detached_from_live_memory(self):
         self.memory.add_node("KN-A", "concept", "A", ["Q01"])
