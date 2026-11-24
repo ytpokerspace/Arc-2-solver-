@@ -10,7 +10,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 SCHEMA_VERSION = 1
 RELATION_TYPES = frozenset({
@@ -537,6 +537,121 @@ class HCM32Memory:
             raise KeyError(node_id)
         return [self.data["procedures"][pid] for pid in node["procedure_refs"]
                 if pid in self.data["procedures"]]
+
+
+
+class HCM32Runtime:
+    """Deterministic interpreter and evidence-gated selector for the HCM-32 DSL.
+
+    Only explicitly registered Python callables can execute. Persisted memory
+    remains declarative data; it is never evaluated as Python or shell code.
+    """
+
+    def __init__(self, memory: HCM32Memory):
+        self.memory = memory
+        self._operators: dict[str, Callable[[tuple[tuple[Any, ...], ...], Mapping[str, Any]], tuple[tuple[Any, ...], ...]]] = {
+            "REFLECT": self._reflect,
+            "ROTATE": self._rotate,
+            "TRANSPOSE": self._transpose,
+        }
+
+    @staticmethod
+    def _grid(value: Any) -> tuple[tuple[Any, ...], ...]:
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ValueError("grid must be a non-empty sequence of rows")
+        if any(not isinstance(row, (list, tuple)) or not row for row in value):
+            raise ValueError("grid rows must be non-empty sequences")
+        width = len(value[0])
+        if any(len(row) != width for row in value):
+            raise ValueError("grid must be rectangular")
+        return tuple(tuple(row) for row in value)
+
+    @staticmethod
+    def _reflect(grid: tuple[tuple[Any, ...], ...], parameters: Mapping[str, Any]) -> tuple[tuple[Any, ...], ...]:
+        axis = parameters.get("axis")
+        if axis == "left-right":
+            return tuple(tuple(reversed(row)) for row in grid)
+        if axis == "top-bottom":
+            return tuple(reversed(grid))
+        raise ValueError("REFLECT axis must be 'left-right' or 'top-bottom'")
+
+    @staticmethod
+    def _rotate(grid: tuple[tuple[Any, ...], ...], parameters: Mapping[str, Any]) -> tuple[tuple[Any, ...], ...]:
+        turns = parameters.get("quarter_turns", 1)
+        if isinstance(turns, bool) or not isinstance(turns, int) or turns not in (1, 2, 3):
+            raise ValueError("ROTATE quarter_turns must be 1, 2, or 3")
+        result = grid
+        for _ in range(turns):
+            result = tuple(tuple(row) for row in zip(*result[::-1]))
+        return result
+
+    @staticmethod
+    def _transpose(grid: tuple[tuple[Any, ...], ...], parameters: Mapping[str, Any]) -> tuple[tuple[Any, ...], ...]:
+        if parameters:
+            raise ValueError("TRANSPOSE takes no parameters")
+        return tuple(tuple(row) for row in zip(*grid))
+
+    def register_operator(
+        self,
+        name: str,
+        operator: Callable[[tuple[tuple[Any, ...], ...], Mapping[str, Any]], tuple[tuple[Any, ...], ...]],
+    ) -> None:
+        """Register trusted runtime code; duplicate names are rejected."""
+        _require_text(name, "operator name")
+        if not callable(operator):
+            raise ValueError("operator must be callable")
+        if name in self._operators:
+            raise ValueError(f"operator already registered: {name}")
+        self._operators[name] = operator
+
+    def _execute_record(self, procedure: Mapping[str, Any], grid: Any) -> tuple[tuple[Any, ...], ...]:
+        result = self._grid(grid)
+        constraints = procedure.get("input_constraints", [])
+        if not isinstance(constraints, list):
+            raise ValueError("input_constraints must be a list")
+        for constraint in constraints:
+            if constraint != "non_empty_rectangular_grid":
+                raise ValueError(f"unsupported input constraint: {constraint}")
+        operations = procedure.get("operations")
+        if not isinstance(operations, list) or not operations:
+            raise ValueError("procedure must contain a non-empty operations list")
+        for operation in operations:
+            if not isinstance(operation, Mapping):
+                raise ValueError("operation must be an object")
+            name = operation.get("operator")
+            parameters = operation.get("parameters", {})
+            if not isinstance(name, str) or name not in self._operators:
+                raise ValueError(f"unregistered DSL operator: {name}")
+            if not isinstance(parameters, Mapping):
+                raise ValueError("operation parameters must be an object")
+            result = self._grid(self._operators[name](result, parameters))
+        return result
+
+    def apply_procedure(self, procedure_id: str, grid: Any) -> tuple[tuple[Any, ...], ...]:
+        """Apply one verified procedure; callers record outcomes after comparison."""
+        procedure = self.memory.data["procedures"].get(procedure_id)
+        if procedure is None:
+            raise KeyError(procedure_id)
+        if procedure.get("status") != "verified":
+            raise ValueError("only verified procedures may be applied")
+        return self._execute_record(procedure, grid)
+
+    def select_procedure(
+        self, node_id: str, demonstration_input: Any, demonstration_output: Any,
+    ) -> dict[str, Any] | None:
+        """Select the sole verified exact-fit procedure; abstain on 0 or >1."""
+        source = self._grid(demonstration_input)
+        expected = self._grid(demonstration_output)
+        matches = []
+        for procedure in self.memory.procedures_for_node(node_id):
+            if procedure.get("status") != "verified":
+                continue
+            try:
+                if self._execute_record(procedure, source) == expected:
+                    matches.append(procedure)
+            except (KeyError, TypeError, ValueError):
+                continue
+        return matches[0] if len(matches) == 1 else None
 
     def snapshot(self) -> dict[str, Any]:
         return _json_copy(self.data, "memory snapshot")
