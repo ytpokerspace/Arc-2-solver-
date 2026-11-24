@@ -101,19 +101,24 @@ class HCM32ProcedureSelectionExperiment(unittest.TestCase):
                 )
             )
 
-            # A draft procedure must not participate in selection or execution.
-            memory.add_procedure(
+            # A draft-only node has no eligible procedure and must abstain.
+            draft_memory = HCM32Memory(Path(directory) / "draft-only.json")
+            draft_memory.add_procedure(
                 "PR-DRAFT", "unverified draft",
                 [{"operator": "REFLECT", "parameters": {"axis": "left-right"}}],
             )
-            memory.data["nodes"]["KN-GRID-TRANSFORMS"]["procedure_refs"].append("PR-DRAFT")
+            draft_memory.add_node(
+                "KN-DRAFT", "transformation_family", "draft-only rule",
+                ["Q22.S02"], procedure_refs=["PR-DRAFT"],
+            )
+            draft_runtime = HCM32Runtime(draft_memory)
             self.assertIsNone(
-                runtime.select_procedure(
-                    "KN-GRID-TRANSFORMS", ((1, 2, 3),), ((3, 2, 1),)
+                draft_runtime.select_procedure(
+                    "KN-DRAFT", ((1, 2, 3),), ((3, 2, 1),)
                 )
             )
             with self.assertRaises(ValueError):
-                runtime.apply_procedure("PR-DRAFT", ((1, 2),))
+                draft_runtime.apply_procedure("PR-DRAFT", ((1, 2),))
 
     def test_runtime_rejects_bad_grids_unknown_operators_and_bad_parameters(self):
         with tempfile.TemporaryDirectory() as directory:
