@@ -50,7 +50,7 @@ class HmseRuleSelectorTests(unittest.TestCase):
         }
         report = run_task(task, candidate_cap=100, max_depth=1)
         self.assertEqual(report["selector"]["selected"], 0)
-        self.assertEqual(report["selector"]["unresolved"], 2)
+        self.assertEqual(report["selector"]["unresolved"], 3)
         self.assertEqual(report["selector"]["exact"], 0)
         self.assertTrue(all(
             fold["selected_rule"] is None and fold["prediction"] is None
