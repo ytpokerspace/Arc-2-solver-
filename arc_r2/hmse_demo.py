@@ -180,31 +180,35 @@ def run_comparison(
 
     pairs = tuple((as_grid(pair["input"]), as_grid(pair["output"])) for pair in train)
     folds = []
-    baseline_started = time.perf_counter()
+    baseline_runtime = 0.0
     baseline_total_candidates = 0
     baseline_exact = 0
-    hmse_started = time.perf_counter()
+    hmse_runtime = 0.0
     hmse_total_candidates = 0
     hmse_exact = 0
 
     for held_index, (held_input, held_output) in enumerate(pairs):
         fit_pairs = tuple(pair for index, pair in enumerate(pairs) if index != held_index)
 
+        baseline_started = time.perf_counter()
         baseline = fit_program(
             fit_pairs, candidate_cap=candidate_cap, max_depth=max_depth
         )
-        baseline_total_candidates += baseline.candidates_evaluated
         baseline_prediction = (
             baseline.program.apply(held_input) if baseline.program is not None else None
         )
+        baseline_runtime += time.perf_counter() - baseline_started
+        baseline_total_candidates += baseline.candidates_evaluated
         baseline_match = baseline_prediction == held_output
         baseline_exact += int(baseline_match)
 
+        hmse_started = time.perf_counter()
         execution = execute_procedure(
             build_demo_procedure(candidate_cap, max_depth),
             {"training_pairs": fit_pairs, "held_out_input": held_input},
             build_registry(),
         )
+        hmse_runtime += time.perf_counter() - hmse_started
         outcome: SynthesisOutcome = execution.state["synthesis"]
         prediction = execution.state["prediction"]
         hmse_total_candidates += outcome.candidates_evaluated
@@ -235,8 +239,6 @@ def run_comparison(
             "hmse_total_stage_evaluations": execution.total_evaluations,
         })
 
-    baseline_runtime = time.perf_counter() - baseline_started
-    hmse_runtime = time.perf_counter() - hmse_started
     return {
         "schema": "arc-hmse-single-task-demo/v1",
         "task_id": str(task.get("task_id", "unknown")),
