@@ -540,6 +540,9 @@ class HCM32Memory:
 
 
 
+    def snapshot(self) -> dict[str, Any]:
+        return _json_copy(self.data, "memory snapshot")
+
 class HCM32Runtime:
     """Deterministic interpreter and evidence-gated selector for the HCM-32 DSL.
 
@@ -652,6 +655,3 @@ class HCM32Runtime:
             except (KeyError, TypeError, ValueError):
                 continue
         return matches[0] if len(matches) == 1 else None
-
-    def snapshot(self) -> dict[str, Any]:
-        return _json_copy(self.data, "memory snapshot")
