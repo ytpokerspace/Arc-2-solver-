@@ -26,11 +26,15 @@ class HCM32ProcedureSelectionExperiment(unittest.TestCase):
             "PR-ROTATE-90": ((7, 4, 1), (8, 5, 2), (9, 6, 3)),
             "PR-TRANSPOSE": ((1, 4, 7), (2, 5, 8), (3, 6, 9)),
         }
+        runtime = HCM32Runtime(memory)
         for procedure_id, name, operations in definitions:
-            memory.add_procedure(
+            procedure = memory.add_procedure(
                 procedure_id, name, operations,
                 input_constraints=["non_empty_rectangular_grid"],
             )
+            # Verify the baseline output before attaching passed evidence.
+            actual = runtime._execute_record(procedure, baseline)
+            self.assertEqual(actual, expected[procedure_id])
             memory.add_evidence(
                 "EV-BASE-" + procedure_id, "procedure", procedure_id,
                 "independent_baseline_fit", "passed",
