@@ -28,7 +28,7 @@ on:
       transfer_task_limit:
         description: "Number of public ARC-AGI-2 tasks for the task-disjoint HCM-32 transfer experiment"
         required: false
-        default: "500"
+        default: "1000"
 permissions:
   contents: read
 jobs:
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run task-disjoint HCM-32 transfer benchmark
         env:
-          TRANSFER_TASK_LIMIT: ${{ github.event.inputs.transfer_task_limit || '500' }}
+          TRANSFER_TASK_LIMIT: ${{ github.event.inputs.transfer_task_limit || '1000' }}
         run: >-
           python -m arc_r2.hcm32_transfer_benchmark
           --dataset arc-agi-2-data/data/training
