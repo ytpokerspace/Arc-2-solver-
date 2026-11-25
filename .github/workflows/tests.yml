@@ -132,3 +132,16 @@ jobs:
           name: arc-hmse-demo-task-00d62c1b
           path: arc_hmse_demo.json
           if-no-files-found: error
+      - name: Run three-way HMSE identity spatial comparison
+        run: >-
+          python -m arc_r2.hmse_identity_spatial
+          --task-json tests/fixtures/arc_agi2_d89b689b_train.json
+          --candidate-cap 1500
+          --max-depth 2
+          --output arc_hmse_identity_spatial.json
+      - name: Upload three-way HMSE identity spatial report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-hmse-identity-spatial-three-way
+          path: arc_hmse_identity_spatial.json
+          if-no-files-found: error

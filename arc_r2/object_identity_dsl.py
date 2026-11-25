@@ -1,10 +1,7 @@
 """Identity-aware object DSL experiment.
 
-Object IDs are assigned once at initialization and retained in IdentityState.
-Unlike index-based execution, transformations update the selected object's tracked
-geometry directly instead of re-detecting and re-numbering components after each
-instruction. Identity metadata is intentionally explicit and is required for
-reliable inverse execution after spatial reordering.
+Object IDs persist in an active or archived registry. REMOVE hides an object
+without destroying its identity; RESTORE is its exact inverse.
 """
 from __future__ import annotations
 
@@ -14,11 +11,7 @@ from .grid import Grid, as_grid
 from .objects import GridObject, detect_objects
 from .object_dsl import ObjectInstruction
 from .object_ops import (
-    move_object,
-    place_object,
-    reflect_object,
-    rotate_object90,
-    scale_object,
+    move_object, place_object, reflect_object, rotate_object90, scale_object,
 )
 
 
@@ -39,6 +32,8 @@ class IdentityInstruction:
     def __post_init__(self):
         if not isinstance(self.object_id, str) or not self.object_id.strip():
             raise ValueError("object_id must be a non-empty string")
+        if self.operation in {"REMOVE", "RESTORE"}:
+            return
         if self.operation == "RECOLOR":
             for name in ("color", "previous_color"):
                 value = getattr(self, name)
@@ -49,7 +44,6 @@ class IdentityInstruction:
             if self.color == self.previous_color:
                 raise ValueError("RECOLOR must change the object's color")
             return
-        # Reuse the established instruction validator for geometric parameters.
         ObjectInstruction(
             self.operation, 0, factor=self.factor, turns=self.turns,
             axis=self.axis, delta_row=self.delta_row, delta_col=self.delta_col,
@@ -57,11 +51,13 @@ class IdentityInstruction:
         )
 
     def inverse(self) -> "IdentityInstruction":
+        if self.operation == "REMOVE":
+            return IdentityInstruction(self.object_id, "RESTORE")
+        if self.operation == "RESTORE":
+            return IdentityInstruction(self.object_id, "REMOVE")
         if self.operation == "RECOLOR":
             return IdentityInstruction(
-                object_id=self.object_id,
-                operation="RECOLOR",
-                color=self.previous_color,
+                self.object_id, "RECOLOR", color=self.previous_color,
                 previous_color=self.color,
             )
         inverse = ObjectInstruction(
@@ -70,15 +66,10 @@ class IdentityInstruction:
             top=self.top, left=self.left,
         ).inverse()
         return IdentityInstruction(
-            object_id=self.object_id,
-            operation=inverse.operation,
-            factor=inverse.factor,
-            turns=inverse.turns,
-            axis=inverse.axis,
-            delta_row=inverse.delta_row,
-            delta_col=inverse.delta_col,
-            top=inverse.top,
-            left=inverse.left,
+            object_id=self.object_id, operation=inverse.operation,
+            factor=inverse.factor, turns=inverse.turns, axis=inverse.axis,
+            delta_row=inverse.delta_row, delta_col=inverse.delta_col,
+            top=inverse.top, left=inverse.left,
         )
 
     def canonical(self) -> tuple:
@@ -91,11 +82,12 @@ class IdentityInstruction:
 
 @dataclass(frozen=True)
 class IdentityState:
-    """Grid plus stable object registry; do not discard before inverse execution."""
+    """Grid plus active and archived object registries."""
     height: int
     width: int
     background: int
     objects: tuple[tuple[str, GridObject], ...]
+    archived_objects: tuple[tuple[str, GridObject], ...] = ()
 
     def to_grid(self) -> Grid:
         output = [[self.background for _ in range(self.width)] for _ in range(self.height)]
@@ -109,6 +101,12 @@ class IdentityState:
         return as_grid(output)
 
     def object_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(
+            [object_id for object_id, _ in self.objects]
+            + [object_id for object_id, _ in self.archived_objects]
+        ))
+
+    def active_object_ids(self) -> tuple[str, ...]:
         return tuple(object_id for object_id, _ in self.objects)
 
 
@@ -126,7 +124,6 @@ class IdentityObjectProgram:
         return IdentityObjectProgram(self.instructions + (instruction,))
 
     def compose(self, other: "IdentityObjectProgram") -> "IdentityObjectProgram":
-        """Compose two independently specified programs in execution order."""
         if not isinstance(other, IdentityObjectProgram):
             raise TypeError("compose requires an IdentityObjectProgram")
         return IdentityObjectProgram(self.instructions + other.instructions)
@@ -146,11 +143,9 @@ class IdentityObjectProgram:
         for row in grid:
             for color in row:
                 counts[color] = counts.get(color, 0) + 1
-        background = min(counts, key=lambda color: (-counts[color], color))
+        background = 0 if 0 in counts else min(counts, key=lambda color: (-counts[color], color))
         objects = detect_objects(grid, background=background)
-        registry = tuple(
-            (f"obj-{index:04d}", obj) for index, obj in enumerate(objects)
-        )
+        registry = tuple((f"obj-{index:04d}", obj) for index, obj in enumerate(objects))
         return IdentityState(len(grid), len(grid[0]), background, registry)
 
     @staticmethod
@@ -158,17 +153,11 @@ class IdentityObjectProgram:
         if instruction.operation == "MOVE":
             return move_object(obj, instruction.delta_row, instruction.delta_col)
         if instruction.operation == "ROTATE90":
-            return place_object(
-                rotate_object90(obj, instruction.turns), obj.bbox[0], obj.bbox[1]
-            )
+            return place_object(rotate_object90(obj, instruction.turns), obj.bbox[0], obj.bbox[1])
         if instruction.operation == "REFLECT":
-            return place_object(
-                reflect_object(obj, instruction.axis), obj.bbox[0], obj.bbox[1]
-            )
+            return place_object(reflect_object(obj, instruction.axis), obj.bbox[0], obj.bbox[1])
         if instruction.operation == "SCALE":
-            return place_object(
-                scale_object(obj, instruction.factor), obj.bbox[0], obj.bbox[1]
-            )
+            return place_object(scale_object(obj, instruction.factor), obj.bbox[0], obj.bbox[1])
         if instruction.operation == "PLACE":
             return place_object(obj, instruction.top, instruction.left)
         if instruction.operation == "RECOLOR":
@@ -177,31 +166,49 @@ class IdentityObjectProgram:
                     f"RECOLOR expected color {instruction.previous_color}, got {obj.color}"
                 )
             return GridObject(instruction.color, obj.cells, obj.bbox)
-        raise ValueError(f"unsupported operation: {instruction.operation}")
+        raise ValueError(f"unsupported transform: {instruction.operation}")
 
     def apply_state(self, state: IdentityState) -> IdentityState:
         if not isinstance(state, IdentityState):
             raise TypeError("apply_state requires IdentityState; raw grids lose identity metadata")
-        registry = dict(state.objects)
-        if len(registry) != len(state.objects):
+        active = dict(state.objects)
+        archived = dict(state.archived_objects)
+        if len(active) != len(state.objects) or len(archived) != len(state.archived_objects):
             raise ValueError("duplicate object identities in state")
+        if set(active) & set(archived):
+            raise ValueError("an object identity cannot be both active and archived")
 
         for instruction in self.instructions:
-            if instruction.object_id not in registry:
-                raise ValueError(f"unknown object identity: {instruction.object_id}")
-            selected = registry[instruction.object_id]
-            transformed = self._transform(selected, instruction)
+            object_id = instruction.object_id
+            if instruction.operation == "REMOVE":
+                if object_id not in active:
+                    raise ValueError(f"cannot remove inactive object identity: {object_id}")
+                archived[object_id] = active.pop(object_id)
+                continue
+            if instruction.operation == "RESTORE":
+                if object_id not in archived:
+                    raise ValueError(f"cannot restore unarchived object identity: {object_id}")
+                restored = archived[object_id]
+                for other_id, other in active.items():
+                    if restored.cells & other.cells:
+                        raise ValueError(f"restored object {object_id} collides with {other_id}")
+                active[object_id] = archived.pop(object_id)
+                continue
+            if object_id not in active:
+                raise ValueError(f"unknown object identity: {object_id}")
+            transformed = self._transform(active[object_id], instruction)
             for row, col in transformed.cells:
                 if not (0 <= row < state.height and 0 <= col < state.width):
                     raise ValueError("transformed object would leave the grid")
-            for other_id, other in registry.items():
-                if other_id != instruction.object_id and transformed.cells & other.cells:
+            for other_id, other in active.items():
+                if other_id != object_id and transformed.cells & other.cells:
                     raise ValueError("transformed object would collide with another object")
-            registry[instruction.object_id] = transformed
+            active[object_id] = transformed
 
         result = IdentityState(
             state.height, state.width, state.background,
-            tuple((object_id, registry[object_id]) for object_id, _ in state.objects),
+            tuple((object_id, active[object_id]) for object_id in sorted(active)),
+            tuple((object_id, archived[object_id]) for object_id in sorted(archived)),
         )
         result.to_grid()
         return result
@@ -210,5 +217,4 @@ class IdentityObjectProgram:
         return self.apply_state(self.initialize(grid))
 
     def apply(self, grid: Grid) -> Grid:
-        """Convenience grid-only API; use execute/apply_state when inversion is needed."""
         return self.execute(grid).to_grid()
