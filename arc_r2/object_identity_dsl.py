@@ -101,7 +101,10 @@ class IdentityState:
         return as_grid(output)
 
     def object_ids(self) -> tuple[str, ...]:
-        return tuple(object_id for object_id, _ in self.objects + self.archived_objects)
+        return tuple(sorted(
+            [object_id for object_id, _ in self.objects]
+            + [object_id for object_id, _ in self.archived_objects]
+        ))
 
     def active_object_ids(self) -> tuple[str, ...]:
         return tuple(object_id for object_id, _ in self.objects)
@@ -192,7 +195,7 @@ class IdentityObjectProgram:
                 active[object_id] = archived.pop(object_id)
                 continue
             if object_id not in active:
-                raise ValueError(f"unknown or inactive object identity: {object_id}")
+                raise ValueError(f"unknown object identity: {object_id}")
             transformed = self._transform(active[object_id], instruction)
             for row, col in transformed.cells:
                 if not (0 <= row < state.height and 0 <= col < state.width):
@@ -204,12 +207,8 @@ class IdentityObjectProgram:
 
         result = IdentityState(
             state.height, state.width, state.background,
-            tuple((object_id, obj) for object_id, obj in state.objects if object_id in active)
-            + tuple((object_id, active[object_id]) for object_id in active
-                    if object_id not in {key for key, _ in state.objects}),
-            tuple((object_id, obj) for object_id, obj in state.archived_objects if object_id in archived)
-            + tuple((object_id, archived[object_id]) for object_id in archived
-                    if object_id not in {key for key, _ in state.archived_objects}),
+            tuple((object_id, active[object_id]) for object_id in sorted(active)),
+            tuple((object_id, archived[object_id]) for object_id in sorted(archived)),
         )
         result.to_grid()
         return result
