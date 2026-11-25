@@ -33,11 +33,23 @@ class IdentityInstruction:
     delta_col: int = 0
     top: int = 0
     left: int = 0
+    color: int | None = None
+    previous_color: int | None = None
 
     def __post_init__(self):
         if not isinstance(self.object_id, str) or not self.object_id.strip():
             raise ValueError("object_id must be a non-empty string")
-        # Reuse the established instruction validator for operation parameters.
+        if self.operation == "RECOLOR":
+            for name in ("color", "previous_color"):
+                value = getattr(self, name)
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise TypeError(f"{name} must be an integer for RECOLOR")
+                if not 0 <= value <= 9:
+                    raise ValueError(f"{name} must be an ARC color in 0..9")
+            if self.color == self.previous_color:
+                raise ValueError("RECOLOR must change the object's color")
+            return
+        # Reuse the established instruction validator for geometric parameters.
         ObjectInstruction(
             self.operation, 0, factor=self.factor, turns=self.turns,
             axis=self.axis, delta_row=self.delta_row, delta_col=self.delta_col,
@@ -45,6 +57,13 @@ class IdentityInstruction:
         )
 
     def inverse(self) -> "IdentityInstruction":
+        if self.operation == "RECOLOR":
+            return IdentityInstruction(
+                object_id=self.object_id,
+                operation="RECOLOR",
+                color=self.previous_color,
+                previous_color=self.color,
+            )
         inverse = ObjectInstruction(
             self.operation, 0, factor=self.factor, turns=self.turns,
             axis=self.axis, delta_row=self.delta_row, delta_col=self.delta_col,
@@ -60,6 +79,13 @@ class IdentityInstruction:
             delta_col=inverse.delta_col,
             top=inverse.top,
             left=inverse.left,
+        )
+
+    def canonical(self) -> tuple:
+        return (
+            self.object_id, self.operation, self.factor, self.turns, self.axis,
+            self.delta_row, self.delta_col, self.top, self.left,
+            self.color, self.previous_color,
         )
 
 
@@ -93,6 +119,20 @@ class IdentityObjectProgram:
     @property
     def complexity(self) -> int:
         return len(self.instructions)
+
+    def then(self, instruction: IdentityInstruction) -> "IdentityObjectProgram":
+        if not isinstance(instruction, IdentityInstruction):
+            raise TypeError("then requires an IdentityInstruction")
+        return IdentityObjectProgram(self.instructions + (instruction,))
+
+    def compose(self, other: "IdentityObjectProgram") -> "IdentityObjectProgram":
+        """Compose two independently specified programs in execution order."""
+        if not isinstance(other, IdentityObjectProgram):
+            raise TypeError("compose requires an IdentityObjectProgram")
+        return IdentityObjectProgram(self.instructions + other.instructions)
+
+    def canonical(self) -> tuple[tuple, ...]:
+        return tuple(instruction.canonical() for instruction in self.instructions)
 
     def inverse(self) -> "IdentityObjectProgram":
         return IdentityObjectProgram(tuple(
@@ -131,6 +171,12 @@ class IdentityObjectProgram:
             )
         if instruction.operation == "PLACE":
             return place_object(obj, instruction.top, instruction.left)
+        if instruction.operation == "RECOLOR":
+            if obj.color != instruction.previous_color:
+                raise ValueError(
+                    f"RECOLOR expected color {instruction.previous_color}, got {obj.color}"
+                )
+            return GridObject(instruction.color, obj.cells, obj.bbox)
         raise ValueError(f"unsupported operation: {instruction.operation}")
 
     def apply_state(self, state: IdentityState) -> IdentityState:
@@ -157,7 +203,7 @@ class IdentityObjectProgram:
             state.height, state.width, state.background,
             tuple((object_id, registry[object_id]) for object_id, _ in state.objects),
         )
-        result.to_grid()  # Validate the complete resulting state.
+        result.to_grid()
         return result
 
     def execute(self, grid: Grid) -> IdentityState:
