@@ -43,6 +43,20 @@ class FullOrchestrationTests(unittest.TestCase):
         self.assertEqual(result.decision.candidate_count, 0)
         self.assertEqual(result.execution.total_evaluations, 3)
 
+
+    def test_registered_rule_families_are_reused_by_full_orchestration(self):
+        examples = (
+            TrainingExample.from_values([[0, 1], [0, 0]], [[1, 0], [0, 0]]),
+            TrainingExample.from_values([[0, 2], [0, 0]], [[2, 0], [0, 0]]),
+        )
+        result = run_full_orchestration(
+            examples, ([[0, 3], [0, 0]],), max_depth=1, candidate_cap=100
+        )
+        rules = result.candidate_pool.family_evidence["registered_rules"]
+        reflection = next(item for item in rules if item["rule_id"] == "reflection")
+        self.assertTrue(reflection["accepted"])
+        self.assertEqual(result.decision.predictions[0], ((3, 0), (0, 0)))
+
     def test_procedure_is_three_stage_and_budgeted(self):
         procedure = build_full_procedure(max_depth=2, candidate_cap=100)
         self.assertEqual(procedure.estimated_steps, 3)
