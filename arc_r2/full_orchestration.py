@@ -6,6 +6,7 @@ training pairs. Test outputs are never accepted by this module.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Iterable, Mapping
 
 from .ahpse import Hypothesis, TrainingExample, synthesize
@@ -102,20 +103,30 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         }
     }
 
+    family_timing: dict[str, float] = {}
+
+    family_start = perf_counter()
     symbolic = synthesize(examples, max_depth=depth, candidate_cap=cap)
+    family_timing["ahpse"] = perf_counter() - family_start
+    ahpse_start_count = len(candidates)
     candidates.extend(Candidate("ahpse", item, item.complexity)
                       for item in symbolic.hypotheses)
     evidence["ahpse"] = {
         "generated": symbolic.candidates_generated,
         "checked": symbolic.candidates_checked,
         "exact_fits": symbolic.exact_fit_count,
+        "candidate_count": len(candidates) - ahpse_start_count,
+        "runtime_seconds": round(family_timing["ahpse"], 6),
         "constraint_checks": symbolic.constraint_checks,
         "constraint_rejections": symbolic.constraint_rejections,
         "abstained": symbolic.abstained,
     }
 
+    family_start = perf_counter()
     primitive = fit_program(pairs, candidate_cap=cap, max_depth=min(depth, 2),
                              memory_path=None)
+    family_timing["primitive"] = perf_counter() - family_start
+    primitive_start_count = len(candidates)
     if primitive.exact_fit and primitive.program is not None:
         candidates.append(Candidate("primitive", primitive.program,
                                     _complexity(primitive.program)))
@@ -123,10 +134,15 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         "candidates_evaluated": primitive.candidates_evaluated,
         "exact_fit": primitive.exact_fit,
         "fit_program_count": primitive.fit_program_count,
+        "candidate_count": len(candidates) - primitive_start_count,
+        "runtime_seconds": round(family_timing["primitive"], 6),
         "memory_enabled": False,
     }
 
+    family_start = perf_counter()
     registered_rules = propose_rule_candidates(pairs, radar["training_inputs"])
+    family_timing["registered_rules"] = perf_counter() - family_start
+    rules_start_count = len(candidates)
     for rule in registered_rules:
         if rule.accepted and rule.program is not None:
             candidates.append(Candidate(
@@ -137,12 +153,17 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
          "reason": rule.reason, "training_pairs_checked": rule.training_pairs_checked}
         for rule in registered_rules
     ]
+    evidence["registered_rule_family"] = {
+        "candidate_count": len(candidates) - rules_start_count,
+        "runtime_seconds": round(family_timing["registered_rules"], 6),
+    }
 
     object_signal_present = any(
         report["scan"]["primary_object_count"] > 0
         for report in radar["training_inputs"]
     )
     if depth >= 1 and object_signal_present:
+        family_start = perf_counter()
         object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
         object_result = ObjectHybridSolver(
             max_depth=min(depth, 4),
@@ -152,16 +173,22 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         if object_result.exact_examples == len(examples):
             candidates.append(Candidate("object", object_result.program,
                                         _complexity(object_result.program)))
+        family_timing["object"] = perf_counter() - family_start
         evidence["object"] = {
             "candidates_evaluated": object_result.candidates_evaluated,
+            "candidate_count": int(object_result.exact_examples == len(examples)),
+            "runtime_seconds": round(family_timing["object"], 6),
             "exact_examples": object_result.exact_examples,
             "total_examples": object_result.total_examples,
             "exact_fit": object_result.exact_examples == len(examples),
             "enabled_by_shape_radar": True,
         }
     else:
+        family_timing["object"] = 0.0
         evidence["object"] = {
             "candidates_evaluated": 0,
+            "candidate_count": 0,
+            "runtime_seconds": 0.0,
             "exact_examples": 0,
             "total_examples": len(examples),
             "exact_fit": False,
@@ -173,6 +200,15 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         }
     # Keep provenance-distinct candidates; consensus is evaluated on each
     # requested input, not by trusting a family name or training score.
+    evidence["family_timing_seconds"] = {
+        name: round(seconds, 6) for name, seconds in family_timing.items()
+    }
+    evidence["family_candidate_counts"] = {
+        "ahpse": evidence["ahpse"]["candidate_count"],
+        "primitive": evidence["primitive"]["candidate_count"],
+        "registered_rules": evidence["registered_rule_family"]["candidate_count"],
+        "object": evidence["object"]["candidate_count"],
+    }
     return CandidatePool(tuple(candidates), evidence)
 
 
