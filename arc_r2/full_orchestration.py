@@ -162,7 +162,11 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         report["scan"]["primary_object_count"] > 0
         for report in radar["training_inputs"]
     )
-    if depth >= 1 and object_signal_present:
+    # Under unanimous consensus, an additional candidate cannot improve a
+    # decision once another family has supplied any exact-fit candidate:
+    # it can only preserve agreement or introduce disagreement. Reserve the
+    # expensive object search for folds where simpler families found none.
+    if depth >= 1 and object_signal_present and not candidates:
         family_start = perf_counter()
         object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
         object_result = ObjectHybridSolver(
@@ -185,6 +189,15 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         }
     else:
         family_timing["object"] = 0.0
+        if depth == 0:
+            object_skip_reason = "max_depth=0 disables object search"
+        elif not object_signal_present:
+            object_skip_reason = "Shape Radar found no foreground objects in training inputs"
+        else:
+            object_skip_reason = (
+                "skipped because another family already supplied an exact-fit candidate; "
+                "additional candidates cannot improve unanimous consensus"
+            )
         evidence["object"] = {
             "candidates_evaluated": 0,
             "candidate_count": 0,
@@ -192,10 +205,7 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
             "exact_examples": 0,
             "total_examples": len(examples),
             "exact_fit": False,
-            "skipped": (
-                "max_depth=0 disables object search" if depth == 0
-                else "Shape Radar found no foreground objects in training inputs"
-            ),
+            "skipped": object_skip_reason,
             "enabled_by_shape_radar": False,
         }
     # Keep provenance-distinct candidates; consensus is evaluated on each
