@@ -11,8 +11,8 @@ class AHPSETests(unittest.TestCase):
                 [[3, 0], [0, 4]],
             ),
             TrainingExample.from_values(
-                [[0, 5], [6, 0]],
-                [[7, 0], [0, 8]],
+                [[0, 1, 0], [2, 0, 0]],
+                [[3, 0], [0, 4], [0, 0]],
             ),
         )
         result = synthesize(examples, max_depth=1)
@@ -20,6 +20,7 @@ class AHPSETests(unittest.TestCase):
         self.assertTrue(any(
             candidate.operations == ("ROT90",)
             and candidate.apply(examples[0].input) == examples[0].output
+            and candidate.apply(examples[1].input) == examples[1].output
             for candidate in result.hypotheses
         ))
 
