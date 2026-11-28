@@ -27,7 +27,12 @@ def load_tasks(dataset: Path, limit: int | None = None) -> list[dict[str, Any]]:
         return tasks
     raw = json.loads(dataset.read_text(encoding="utf-8"))
     if isinstance(raw, dict):
-        tasks = [{"task_id": key, **value} for key, value in sorted(raw.items())]
+        if "train" in raw:
+            tasks = [raw]
+        else:
+            if not all(isinstance(value, dict) for value in raw.values()):
+                raise ValueError("task mapping values must be task objects")
+            tasks = [{"task_id": key, **value} for key, value in sorted(raw.items())]
     elif isinstance(raw, list):
         tasks = raw
     else:
