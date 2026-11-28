@@ -28,7 +28,9 @@ The test input is applied only after synthesis. Its output is never supplied to 
 
 ## Evidence semantics
 
-HMSE records the method ID, partition, evaluation count, and AHPSE evidence: generated/checked candidates, exact-fit count, abstention flag, and reason.
+HMSE records the method ID, partition, evaluation count, and AHPSE evidence: generated/checked candidates, constraint checks/rejections, exact-fit count, abstention flag, and reason.
+
+The constraint stage first checks transformed grid dimensions and whether the same cell-wise color map explains every visible training pair. These are conservative prefilters, not general ARC semantic constraints.
 
 The HMSE validator's score of 1.0 means only that at least one candidate exactly fits the supplied training pairs. It is **not** a calibrated probability or a claim of held-out generalization.
 
