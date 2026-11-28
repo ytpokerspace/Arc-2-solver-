@@ -48,7 +48,7 @@ class Decision:
 class FullOrchestrationResult:
     decision: Decision
     execution: ExecutionResult
-    radar_reports: tuple[Mapping[str, Any], ...]
+    radar_reports: Mapping[str, Any]
     candidate_pool: CandidatePool
 
 
@@ -66,17 +66,40 @@ def _complexity(program: Any) -> int:
 def _scan(state: Mapping[str, Any], parameters: Mapping[str, Any]):
     examples = state["training_examples"]
     tests = state["test_inputs"]
-    grids = [item.input for item in examples] + list(tests)
-    return tuple(scan_grid(grid) for grid in grids)
+    input_reports = tuple(scan_grid(item.input) for item in examples)
+    output_reports = tuple(scan_grid(item.output) for item in examples)
+    test_reports = tuple(scan_grid(grid) for grid in tests)
+    pair_deltas = tuple({
+        "input_objects": source["scan"]["primary_object_count"],
+        "output_objects": target["scan"]["primary_object_count"],
+        "input_relations": len(source["relationships"]),
+        "output_relations": len(target["relationships"]),
+    } for source, target in zip(input_reports, output_reports))
+    return {
+        "schema": "arc-full-perception/v1",
+        "training_inputs": input_reports,
+        "training_outputs": output_reports,
+        "test_inputs": test_reports,
+        "training_pair_deltas": pair_deltas,
+    }
 
 
 def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> CandidatePool:
     examples: tuple[TrainingExample, ...] = state["training_examples"]
+    radar: Mapping[str, Any] = state["radar_reports"]
     pairs = tuple((item.input, item.output) for item in examples)
     cap = int(parameters["candidate_cap"])
     depth = int(parameters["max_depth"])
     candidates: list[Candidate] = []
-    evidence: dict[str, Any] = {}
+    evidence: dict[str, Any] = {
+        "perception": {
+            "schema": radar["schema"],
+            "training_pairs_scanned": len(radar["training_inputs"]),
+            "input_object_counts": [item["scan"]["primary_object_count"] for item in radar["training_inputs"]],
+            "output_object_counts": [item["scan"]["primary_object_count"] for item in radar["training_outputs"]],
+            "pair_relation_deltas": list(radar["training_pair_deltas"]),
+        }
+    }
 
     symbolic = synthesize(examples, max_depth=depth, candidate_cap=cap)
     candidates.extend(Candidate("ahpse", item, item.complexity)
@@ -102,7 +125,11 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         "memory_enabled": False,
     }
 
-    if depth >= 1:
+    object_signal_present = any(
+        report["scan"]["primary_object_count"] > 0
+        for report in radar["training_inputs"]
+    )
+    if depth >= 1 and object_signal_present:
         object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
         object_result = ObjectHybridSolver(
             max_depth=min(depth, 4),
@@ -117,6 +144,19 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
             "exact_examples": object_result.exact_examples,
             "total_examples": object_result.total_examples,
             "exact_fit": object_result.exact_examples == len(examples),
+            "enabled_by_shape_radar": True,
+        }
+    else:
+        evidence["object"] = {
+            "candidates_evaluated": 0,
+            "exact_examples": 0,
+            "total_examples": len(examples),
+            "exact_fit": False,
+            "skipped": (
+                "max_depth=0 disables object search" if depth == 0
+                else "Shape Radar found no foreground objects in training inputs"
+            ),
+            "enabled_by_shape_radar": False,
         }
     else:
         evidence["object"] = {
