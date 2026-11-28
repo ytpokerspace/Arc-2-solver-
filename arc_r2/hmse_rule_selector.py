@@ -101,14 +101,25 @@ def _scan_training_pairs(state: Mapping[str, Any], params: Mapping[str, Any]):
     return tuple(scan_grid(source, connectivity=4) for source, _ in state["training_pairs"])
 
 
-def _select_rule(state: Mapping[str, Any], params: Mapping[str, Any]):
-    pairs = tuple((as_grid(source), as_grid(target)) for source, target in state["training_pairs"])
-    candidates = (
-        _hole_fill_candidate(pairs, state["perception"]),
+def propose_rule_candidates(training_pairs, perception_reports):
+    """Return the four registered, exact-fit rule-family proposals.
+
+    This public adapter lets broader orchestration reuse the existing families
+    without duplicating their rule logic or accepting a task-family label.
+    """
+    pairs = tuple((as_grid(source), as_grid(target)) for source, target in training_pairs)
+    scans = tuple(perception_reports)
+    return (
+        _hole_fill_candidate(pairs, scans),
         _spatial_candidate(pairs),
         _reflection_candidate(pairs),
         _latin_square_candidate(pairs),
     )
+
+
+def _select_rule(state: Mapping[str, Any], params: Mapping[str, Any]):
+    pairs = tuple((as_grid(source), as_grid(target)) for source, target in state["training_pairs"])
+    candidates = propose_rule_candidates(pairs, state["perception"])
     accepted = tuple(candidate for candidate in candidates if candidate.accepted)
     if len(accepted) == 1:
         chosen = accepted[0]

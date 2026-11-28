@@ -239,3 +239,10 @@ tests with:
 ```bash
 python -m unittest discover -s tests -p 'test_hcm32.py' -v
 ```
+
+
+## Full HMSE orchestration (opt-in)
+
+The new arc_r2.full_orchestration path connects Shape Radar perception, AHPSE synthesis, the primitive fitter, and the object-level solver through a three-stage HMSE procedure. It returns predictions only when exact-fit candidate families agree; otherwise it abstains. The default primitive-first solver remains unchanged.
+
+See docs/FULL_ORCHESTRATION.md for usage, safeguards, and the controlled leave-one-training-pair-out comparison command (python -m arc_r2.full_orchestration_benchmark).
