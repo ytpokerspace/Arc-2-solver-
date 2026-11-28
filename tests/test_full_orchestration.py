@@ -62,6 +62,14 @@ class FullOrchestrationTests(unittest.TestCase):
         reflection = next(item for item in rules if item["rule_id"] == "reflection")
         self.assertTrue(reflection["accepted"])
         self.assertEqual(result.decision.predictions[0], ((3, 0), (0, 0)))
+        self.assertIn("skipped", result.candidate_pool.family_evidence["object"])
+        self.assertIn(
+            "another family already supplied",
+            result.candidate_pool.family_evidence["object"]["skipped"],
+        )
+        self.assertEqual(
+            result.candidate_pool.family_evidence["object"]["runtime_seconds"], 0.0
+        )
 
     def test_procedure_is_three_stage_and_budgeted(self):
         procedure = build_full_procedure(max_depth=2, candidate_cap=100)
