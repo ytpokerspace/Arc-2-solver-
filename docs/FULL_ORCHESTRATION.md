@@ -6,7 +6,7 @@ The arc_r2.full_orchestration module is the opt-in multi-family orchestration pa
 
 ## Execution stages
 
-1. **Perception:** Shape Radar scans each visible training input and each requested prediction input. No target output is provided to perception.
+1. **Perception:** Shape Radar scans each visible training input, its visible training output, and each requested prediction input. Pairwise object/relation deltas are passed into synthesis as structural evidence. No hidden target output is provided to perception.
 2. **Candidate synthesis:** AHPSE, the existing primitive fitter, and the object-level solver run as separate candidate families. Each receives only the visible fit pairs. Persistent memory is disabled.
 3. **Consensus and abstention:** Every exact-fit candidate is applied to each requested input. A prediction is returned only when all surviving candidates agree. If families disagree, or no valid exact-fit candidate exists, the pipeline abstains.
 
