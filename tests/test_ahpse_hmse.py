@@ -48,6 +48,8 @@ class AHPSEHMSEIntegrationTests(unittest.TestCase):
         evidence = execution.stages[0].candidates[0].evidence
         self.assertGreater(evidence["exact_fit_count"], 0)
         self.assertFalse(evidence["abstained"])
+        self.assertIn("constraint_checks", evidence)
+        self.assertIn("constraint_rejections", evidence)
 
     def test_no_fit_abstains_and_hmse_does_not_select_it(self):
         contradictory = (
