@@ -49,6 +49,8 @@ def register_ahpse_methods(registry: MethodRegistry) -> None:
             "candidates_generated": output.candidates_generated,
             "candidates_checked": output.candidates_checked,
             "exact_fit_count": output.exact_fit_count,
+            "constraint_checks": output.constraint_checks,
+            "constraint_rejections": output.constraint_rejections,
             "abstained": output.abstained,
             "reason": output.reason,
         }
