@@ -65,6 +65,24 @@ def _complexity(program: Any) -> int:
     return int(value() if callable(value) else value)
 
 
+def _all_test_inputs_covered(candidates: Iterable[Candidate],
+                             test_inputs: Iterable[Grid]) -> bool:
+    """True only when every requested input has at least one applicable candidate."""
+    candidate_list = tuple(candidates)
+    for grid in test_inputs:
+        covered = False
+        for candidate in candidate_list:
+            try:
+                candidate.apply(grid)
+                covered = True
+                break
+            except (ValueError, TypeError, IndexError):
+                continue
+        if not covered:
+            return False
+    return True
+
+
 def _scan(state: Mapping[str, Any], parameters: Mapping[str, Any]):
     examples = state["training_examples"]
     tests = state["test_inputs"]
@@ -162,11 +180,12 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         report["scan"]["primary_object_count"] > 0
         for report in radar["training_inputs"]
     )
-    # Under unanimous consensus, an additional candidate cannot improve a
-    # decision once another family has supplied any exact-fit candidate:
-    # it can only preserve agreement or introduce disagreement. Reserve the
-    # expensive object search for folds where simpler families found none.
-    if depth >= 1 and object_signal_present and not candidates:
+    # Under unanimous consensus, an additional candidate cannot improve
+    # coverage when every requested input already has an applicable candidate:
+    # it can only preserve agreement or introduce disagreement. Keep object
+    # search available for any input not covered by the simpler families.
+    test_inputs_covered = _all_test_inputs_covered(candidates, state["test_inputs"])
+    if depth >= 1 and object_signal_present and not test_inputs_covered:
         family_start = perf_counter()
         object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
         object_result = ObjectHybridSolver(
@@ -195,8 +214,8 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
             object_skip_reason = "Shape Radar found no foreground objects in training inputs"
         else:
             object_skip_reason = (
-                "skipped because another family already supplied an exact-fit candidate; "
-                "additional candidates cannot improve unanimous consensus"
+                "skipped because every requested test input already has an applicable "
+                "candidate; additional candidates cannot improve coverage under unanimous consensus"
             )
         evidence["object"] = {
             "candidates_evaluated": 0,
