@@ -24,6 +24,15 @@ class FullOrchestrationBenchmarkTests(unittest.TestCase):
             self.assertEqual(report["primitive_baseline"]["held_out_exact"], 2)
             self.assertFalse(report["hidden_test_outputs_read"])
             self.assertFalse(report["memory_enabled"])
+            self.assertEqual(
+                set(report["family_profile"]),
+                {"ahpse", "primitive", "registered_rules", "object"},
+            )
+            self.assertTrue(all(
+                item["runtime_seconds_total"] >= 0
+                and item["candidate_count_total"] >= 0
+                for item in report["family_profile"].values()
+            ))
             self.assertEqual(len(report["fold_results"]), 2)
 
     def test_skips_tasks_without_two_training_pairs(self):
