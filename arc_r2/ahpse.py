@@ -75,6 +75,8 @@ class SynthesisResult:
     candidates_generated: int
     candidates_checked: int
     exact_fit_count: int
+    constraint_checks: int
+    constraint_rejections: int
     abstained: bool
     reason: str
 
@@ -172,7 +174,7 @@ def synthesize(
 
     first = pairs[0]
     accepted: dict[tuple, Hypothesis] = {}
-    generated = checked = 0
+    generated = checked = constraint_checks = constraint_rejections = 0
 
     for operations in _programs(max_depth, candidate_cap):
         generated += 1
@@ -190,6 +192,26 @@ def synthesize(
         if key in accepted:
             continue
         checked += 1
+        # Cheap structural/color constraints run before full pixel equality.
+        # The same global color map must explain every visible training pair.
+        constraints_ok = True
+        for pair in pairs:
+            constraint_checks += 1
+            candidate_grid = pair.input
+            try:
+                for operation in operations:
+                    candidate_grid = _apply_operation(candidate_grid, operation)
+            except (ValueError, IndexError):
+                constraints_ok = False
+                break
+            if ((len(candidate_grid), len(candidate_grid[0])) !=
+                    (len(pair.output), len(pair.output[0])) or
+                    _infer_color_map(candidate_grid, pair.output) != color_map):
+                constraints_ok = False
+                break
+        if not constraints_ok:
+            constraint_rejections += 1
+            continue
         if all(_safe_apply(hypothesis, pair.input) == pair.output
                for pair in pairs):
             accepted[key] = hypothesis
@@ -204,6 +226,8 @@ def synthesize(
         candidates_generated=generated,
         candidates_checked=checked,
         exact_fit_count=len(ranked),
+        constraint_checks=constraint_checks,
+        constraint_rejections=constraint_rejections,
         abstained=not bool(ranked),
         reason=("exact training fit" if ranked else
                 "no candidate exactly fits every supplied training pair"),
