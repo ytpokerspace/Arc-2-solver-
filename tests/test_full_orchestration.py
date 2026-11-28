@@ -22,6 +22,12 @@ class FullOrchestrationTests(unittest.TestCase):
         self.assertEqual(result.radar_reports["schema"], "arc-full-perception/v1")
         self.assertEqual(len(result.radar_reports["training_outputs"]), 2)
         self.assertEqual(result.candidate_pool.family_evidence["perception"]["training_pairs_scanned"], 2)
+        evidence = result.candidate_pool.family_evidence
+        self.assertEqual(set(evidence["family_timing_seconds"]),
+                         {"ahpse", "primitive", "registered_rules", "object"})
+        self.assertEqual(set(evidence["family_candidate_counts"]),
+                         {"ahpse", "primitive", "registered_rules", "object"})
+        self.assertTrue(all(value >= 0 for value in evidence["family_timing_seconds"].values()))
 
     def test_disagreement_abstains_instead_of_selecting_first_candidate(self):
         examples = (
