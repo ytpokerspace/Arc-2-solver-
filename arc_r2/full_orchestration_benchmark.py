@@ -100,6 +100,26 @@ def run_benchmark(dataset: Path, *, limit: int | None = None,
     count = len(folds)
     full_correct = sum(row["full_exact"] for row in folds)
     base_correct = sum(row["baseline_exact"] for row in folds)
+    family_names = ("ahpse", "primitive", "registered_rules", "object")
+    family_profile = {
+        name: {
+            "candidate_count_total": sum(
+                row["full_family_evidence"].get("family_candidate_counts", {}).get(name, 0)
+                for row in folds
+            ),
+            "runtime_seconds_total": round(sum(
+                row["full_family_evidence"].get("family_timing_seconds", {}).get(
+                    "registered_rule_family" if name == "registered_rules" else name, 0.0
+                )
+                for row in folds
+            ), 6),
+            "folds_with_candidate": sum(
+                row["full_family_evidence"].get("family_candidate_counts", {}).get(name, 0) > 0
+                for row in folds
+            ),
+        }
+        for name in family_names
+    }
     return {
         "benchmark": "ARC-R2 full orchestration vs primitive baseline",
         "dataset": dataset.name,
@@ -115,6 +135,7 @@ def run_benchmark(dataset: Path, *, limit: int | None = None,
             "candidate_count_total": sum(row["full_candidate_count"] for row in folds),
             "runtime_seconds_total": round(sum(row["full_runtime_seconds"] for row in folds), 6),
         },
+        "family_profile": family_profile,
         "primitive_baseline": {
             "held_out_exact": base_correct,
             "held_out_accuracy": base_correct / count if count else 0.0,
@@ -160,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         "full_orchestration": report["full_orchestration"],
         "primitive_baseline": report["primitive_baseline"],
         "accuracy_delta_full_minus_baseline": report["accuracy_delta_full_minus_baseline"],
+        "family_profile": report["family_profile"],
         "hidden_test_outputs_read": report["hidden_test_outputs_read"],
     }, indent=2))
     return 0
