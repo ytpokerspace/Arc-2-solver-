@@ -195,7 +195,7 @@ jobs:
               f"- Hidden evaluation outputs read: {report['hidden_test_outputs_read']}",
           ]
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write("\\n".join(lines) + "\\n")
+              summary.write("\n".join(lines) + "\n")
           PY
       - name: Upload 20-task full orchestration comparison report
         uses: actions/upload-artifact@v4
