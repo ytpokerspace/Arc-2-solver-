@@ -7,7 +7,7 @@ The arc_r2.full_orchestration module is the opt-in multi-family orchestration pa
 ## Execution stages
 
 1. **Perception:** Shape Radar scans each visible training input, its visible training output, and each requested prediction input. Pairwise object/relation deltas are passed into synthesis as structural evidence. No hidden target output is provided to perception.
-2. **Candidate synthesis:** AHPSE, the existing primitive fitter, and registered rule families receive only visible fit pairs. The object-level solver is a fallback and runs only when those families produce no exact-fit candidate. Under unanimous consensus, adding another candidate after a candidate already exists cannot improve coverage; it can only preserve agreement or create disagreement. Persistent memory is disabled.
+2. **Candidate synthesis:** AHPSE, the existing primitive fitter, and registered rule families receive only visible fit pairs. The object-level solver is a fallback and runs only when at least one requested prediction input has no applicable candidate from the simpler families. Under unanimous consensus, adding another candidate to an already-covered input cannot improve coverage; it can only preserve agreement or create disagreement. Persistent memory is disabled.
 3. **Consensus and abstention:** Every exact-fit candidate is applied to each requested input. A prediction is returned only when all surviving candidates agree. If families disagree, or no valid exact-fit candidate exists, the pipeline abstains.
 
 The HMSE trace records all three stages, selected methods, and evaluation counts. Family-specific evidence records candidate counts and measured synthesis time for AHPSE, the primitive fitter, registered rules, and object search. The benchmark aggregates this profile across folds so expensive families that contribute no candidates are visible.
@@ -50,6 +50,6 @@ The report separates held-out exact accuracy, abstentions, ambiguity, candidate 
 - Never pass ARC evaluation outputs into this module or its benchmark.
 - Exact training fit is necessary for a candidate to enter consensus, but does not establish generalization.
 - Disagreement is handled by abstention, not arbitrary tie-breaking.
-- max_depth=0 disables object-level search; object search begins at depth 1 and is skipped when another family has already supplied an exact-fit candidate.
+- max_depth=0 disables object-level search; object search begins at depth 1 and is skipped only when every requested prediction input already has at least one applicable candidate.
 - This is a bounded operator-family ensemble, not complete ARC rule induction.
 - The default solver remains unchanged until controlled results justify promotion.
