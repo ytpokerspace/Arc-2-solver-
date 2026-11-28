@@ -17,6 +17,7 @@ from .object_solver import ObjectExample, ObjectHybridSolver
 from .primitives import Program, fit_program
 from .shape_radar import scan_grid
 from .grid import Grid, as_grid
+from .hmse_rule_selector import propose_rule_candidates
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,18 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         "fit_program_count": primitive.fit_program_count,
         "memory_enabled": False,
     }
+
+    registered_rules = propose_rule_candidates(pairs, radar["training_inputs"])
+    for rule in registered_rules:
+        if rule.accepted and rule.program is not None:
+            candidates.append(Candidate(
+                "rule:" + rule.rule_id, rule.program, _complexity(rule.program)
+            ))
+    evidence["registered_rules"] = [
+        {"rule_id": rule.rule_id, "accepted": rule.accepted,
+         "reason": rule.reason, "training_pairs_checked": rule.training_pairs_checked}
+        for rule in registered_rules
+    ]
 
     object_signal_present = any(
         report["scan"]["primary_object_count"] > 0
