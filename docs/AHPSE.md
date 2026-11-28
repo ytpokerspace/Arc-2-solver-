@@ -44,13 +44,13 @@ A one-pair exact fit is only a hypothesis, not evidence of generalization. Repor
 - Current constraints are deliberately narrow (grid dimensions and globally consistent cell-wise color mapping); they do not model object relations or general ARC semantics.
 - The color map is inferred from cell-aligned transformed grids and cannot express object-dependent recoloring.
 - Cropping assumes color 0 is background.
-- No graph, object identity, constraint solver, or HMSE execution adapter is connected yet.
+- No graph/object-identity model or general-purpose constraint solver is connected yet; the narrow prefilter and explicit HMSE adapter are implemented.
 - The default solver and benchmark behavior remain unchanged.
 
 ## Next integration gates
 
 1. Add more typed operators only with unit tests and explicit preconditions.
-2. Add an HMSE adapter that stores declarative operation IDs and parameters.
+2. [x] Add an HMSE adapter that stores declarative operation IDs and parameters.
 3. Expand constraint-based pruning only when each new constraint has a soundness test and measurable benefit.
 4. Compare AHPSE against the primitive baseline on identical leave-one-pair-out folds and candidate/runtime budgets.
 5. Promote it into a broader pipeline only if independent-task results justify the complexity.
