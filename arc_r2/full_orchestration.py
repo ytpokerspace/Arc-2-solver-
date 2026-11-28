@@ -158,15 +158,6 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
             ),
             "enabled_by_shape_radar": False,
         }
-    else:
-        evidence["object"] = {
-            "candidates_evaluated": 0,
-            "exact_examples": 0,
-            "total_examples": len(examples),
-            "exact_fit": False,
-            "skipped": "max_depth=0 disables object search",
-        }
-
     # Keep provenance-distinct candidates; consensus is evaluated on each
     # requested input, not by trusting a family name or training score.
     return CandidatePool(tuple(candidates), evidence)
@@ -227,7 +218,7 @@ def build_full_procedure(*, max_depth: int = 2,
                 SearchPartition("symbolic-and-dsl-families", (
                     MethodSpec("arc.full.synthesize", {
                         "max_depth": max_depth, "candidate_cap": candidate_cap,
-                    }, ("training_examples",)),
+                    }, ("training_examples", "radar_reports")),
                 )),
             ), requires=("training_examples", "radar_reports"),
                 validator_id="arc.full.completed", max_evaluations=1),
