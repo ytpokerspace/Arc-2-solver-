@@ -9,7 +9,7 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -159,4 +159,47 @@ jobs:
         with:
           name: arc-r2-full-orchestration-fixture-comparison
           path: full_orchestration_fixture_report.json
+          if-no-files-found: error
+
+      - name: Check out pinned public ARC-AGI-2 training data
+        uses: actions/checkout@v4
+        with:
+          repository: arcprize/ARC-AGI-2
+          ref: f3283f727488ad98fe575ea6a5ac981e4a188e49
+          path: arc-agi-2-data
+      - name: Run full orchestration comparison on 20 pinned public training tasks
+        run: >-
+          python -m arc_r2.full_orchestration_benchmark
+          --dataset arc-agi-2-data/data/training
+          --limit 20
+          --candidate-cap 500
+          --max-depth 2
+          --output full_orchestration_20_task_report.json
+      - name: Publish full orchestration comparison summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          report = json.load(open("full_orchestration_20_task_report.json", encoding="utf-8"))
+          full = report["full_orchestration"]
+          baseline = report["primitive_baseline"]
+          lines = [
+              "## Full ARC orchestration vs primitive baseline (20-task subset)",
+              f"- Tasks considered: {report['tasks_considered']}",
+              f"- Eligible tasks: {report['eligible_tasks']}",
+              f"- Held-out folds: {report['folds']}",
+              f"- Full orchestration: {full['held_out_exact']} exact; {full['held_out_accuracy']:.2%} accuracy; {full['abstentions']} abstentions",
+              f"- Primitive baseline: {baseline['held_out_exact']} exact; {baseline['held_out_accuracy']:.2%} accuracy; {baseline['abstentions']} abstentions",
+              f"- Accuracy delta: {report['accuracy_delta_full_minus_baseline']:+.2%}",
+              f"- Runtime: full {full['runtime_seconds_total']:.3f}s; baseline {baseline['runtime_seconds_total']:.3f}s",
+              f"- Hidden evaluation outputs read: {report['hidden_test_outputs_read']}",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\\n".join(lines) + "\\n")
+          PY
+      - name: Upload 20-task full orchestration comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-r2-full-orchestration-20-task-comparison
+          path: full_orchestration_20_task_report.json
           if-no-files-found: error
