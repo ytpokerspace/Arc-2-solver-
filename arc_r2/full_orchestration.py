@@ -102,21 +102,30 @@ def _synthesize(state: Mapping[str, Any], parameters: Mapping[str, Any]) -> Cand
         "memory_enabled": False,
     }
 
-    object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
-    object_result = ObjectHybridSolver(
-        max_depth=max(1, min(depth, 4)),
-        candidate_cap=min(cap, 10_000),
-        parameter_cap=min(cap, 10_000),
-    ).solve(object_examples)
-    if object_result.exact_examples == len(examples):
-        candidates.append(Candidate("object", object_result.program,
-                                    _complexity(object_result.program)))
-    evidence["object"] = {
-        "candidates_evaluated": object_result.candidates_evaluated,
-        "exact_examples": object_result.exact_examples,
-        "total_examples": object_result.total_examples,
-        "exact_fit": object_result.exact_examples == len(examples),
-    }
+    if depth >= 1:
+        object_examples = tuple(ObjectExample(item.input, item.output) for item in examples)
+        object_result = ObjectHybridSolver(
+            max_depth=min(depth, 4),
+            candidate_cap=min(cap, 10_000),
+            parameter_cap=min(cap, 10_000),
+        ).solve(object_examples)
+        if object_result.exact_examples == len(examples):
+            candidates.append(Candidate("object", object_result.program,
+                                        _complexity(object_result.program)))
+        evidence["object"] = {
+            "candidates_evaluated": object_result.candidates_evaluated,
+            "exact_examples": object_result.exact_examples,
+            "total_examples": object_result.total_examples,
+            "exact_fit": object_result.exact_examples == len(examples),
+        }
+    else:
+        evidence["object"] = {
+            "candidates_evaluated": 0,
+            "exact_examples": 0,
+            "total_examples": len(examples),
+            "exact_fit": False,
+            "skipped": "max_depth=0 disables object search",
+        }
 
     # Keep provenance-distinct candidates; consensus is evaluated on each
     # requested input, not by trusting a family name or training score.
