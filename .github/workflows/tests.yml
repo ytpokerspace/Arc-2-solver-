@@ -192,6 +192,7 @@ jobs:
               f"- Primitive baseline: {baseline['held_out_exact']} exact; {baseline['held_out_accuracy']:.2%} accuracy; {baseline['abstentions']} abstentions",
               f"- Accuracy delta: {report['accuracy_delta_full_minus_baseline']:+.2%}",
               f"- Runtime: full {full['runtime_seconds_total']:.3f}s; baseline {baseline['runtime_seconds_total']:.3f}s",
+              f"- Family profile: {json.dumps(report['family_profile'], sort_keys=True)}",
               f"- Hidden evaluation outputs read: {report['hidden_test_outputs_read']}",
           ]
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
