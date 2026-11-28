@@ -32,6 +32,8 @@ class AHPSETests(unittest.TestCase):
         result = synthesize(examples, max_depth=0)
         self.assertTrue(result.abstained)
         self.assertEqual(result.exact_fit_count, 0)
+        self.assertGreater(result.constraint_checks, 0)
+        self.assertGreater(result.constraint_rejections, 0)
 
     def test_candidate_budget_is_enforced(self):
         examples = (TrainingExample.from_values([[1]], [[1]]),)
