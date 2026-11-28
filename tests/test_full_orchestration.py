@@ -64,7 +64,7 @@ class FullOrchestrationTests(unittest.TestCase):
         self.assertEqual(result.decision.predictions[0], ((3, 0), (0, 0)))
         self.assertIn("skipped", result.candidate_pool.family_evidence["object"])
         self.assertIn(
-            "another family already supplied",
+            "every requested test input already has an applicable",
             result.candidate_pool.family_evidence["object"]["skipped"],
         )
         self.assertEqual(
